@@ -2,6 +2,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+// Safe baseline security headers (won't break Next/Supabase)
 function applySecurityHeaders(res: NextResponse) {
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
@@ -13,41 +14,28 @@ function applySecurityHeaders(res: NextResponse) {
   return res;
 }
 
-function isStaffByMetadataOrAllowlist(user: any): boolean {
-  const role = user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role ?? "";
-  if (typeof role === "string" && ["staff", "admin", "kallr"].includes(role.toLowerCase())) return true;
-
+function emailAllowlisted(user: any): boolean {
   const allow = (process.env.KALLR_STAFF_EMAILS ?? process.env.NEXT_PUBLIC_KALLR_STAFF_EMAILS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 
   const email = (user?.email ?? "").toLowerCase();
-  if (allow.length && email && allow.includes(email)) return true;
-
-  return false;
+  return !!(allow.length && email && allow.includes(email));
 }
 
-async function isStaffUser(
+async function isStaffByTable(
   supabase: ReturnType<typeof createServerClient>,
-  user: any
+  userId: string
 ): Promise<boolean> {
-  // 1) Fast pass: metadata/env allowlist
-  if (isStaffByMetadataOrAllowlist(user)) return true;
+  const { data, error } = await supabase
+    .from("staff_users")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
 
-  // 2) Source of truth: staff_users table
-  try {
-    const { data, error } = await supabase
-      .from("staff_users")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (error) return false;
-    return !!data;
-  } catch {
-    return false;
-  }
+  if (error) return false;
+  return !!data;
 }
 
 export async function middleware(req: NextRequest) {
@@ -74,7 +62,7 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  // Get user (the “real” gate)
+  // get user from session
   const { data } = await supabase.auth.getUser();
   const user = data.user;
 
@@ -85,7 +73,9 @@ export async function middleware(req: NextRequest) {
       return applySecurityHeaders(r);
     }
 
-    const ok = await isStaffUser(supabase, user);
+    // Pass if allowlisted email OR exists in staff_users table
+    const ok = emailAllowlisted(user) || (await isStaffByTable(supabase, user.id));
+
     if (!ok) {
       const r = NextResponse.redirect(new URL("/", req.url));
       return applySecurityHeaders(r);
@@ -105,5 +95,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: ["/internal/:path*", "/portal/:path*"],
 };
+
