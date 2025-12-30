@@ -1,0 +1,121 @@
+import Link from "next/link";
+import Image from "next/image";
+import styles from "./footer.module.css";
+
+const solutions = [
+  { label: "AI Phone Receptionist", href: "/ai-phone-receptionist" },
+  { label: "AI SMS Automations", href: "/sms-ai-automations" },
+  { label: "SEO Services", href: "/seo-services" },
+];
+
+const industries = [
+  { label: "Home Services", href: "/home-services" },
+  { label: "Automotive", href: "/automotive" },
+  { label: "Health", href: "/health" },
+  { label: "Education", href: "/education" },
+  { label: "Contractors", href: "/contractors" },
+];
+
+const locations = [
+  { label: "Boston, MA", href: "/boston-ma" },
+  { label: "Providence, RI", href: "/providence-ri" },
+  { label: "Hartford, CT", href: "/hartford-ct" },
+];
+
+const company = [
+  { label: "Quotes", href: "/quotes" },
+  { label: "About", href: "/about" },
+  { label: "Contact", href: "/contact" },
+  { label: "Blog", href: "/blog" }, // footer-only
+];
+
+const legal = [
+  { label: "Privacy Policy", href: "/privacy-policy" },
+  { label: "Terms of Service", href: "/terms-of-service" },
+];
+
+export default function Footer() {
+  const year = new Date().getFullYear();
+
+  return (
+    <footer className={styles.footer}>
+      <div className={styles.inner}>
+        {/* Brand / About */}
+        <div className={styles.brandCol}>
+          <div className={styles.brandRow}>
+            <Image
+              src="/kallricon.png"
+              alt="Kallr icon"
+              width={64}
+              height={64}
+              className={styles.brandIcon}
+              priority
+            />
+            
+          </div>
+
+          <p className={styles.blurb}>
+            AI reception + follow-up automation built to capture demand and book the next step—24/7.
+          </p>
+
+          <div className={styles.meta}>© {year} Kallr. All rights reserved.</div>
+        </div>
+
+        {/* Link Columns */}
+        <div className={styles.cols}>
+          <div className={styles.col}>
+            <div className={styles.title}>Solutions</div>
+            {solutions.map((i) => (
+              <Link key={i.href} className={styles.link} href={i.href}>
+                {i.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className={styles.col}>
+            <div className={styles.title}>Industries</div>
+            {industries.map((i) => (
+              <Link key={i.href} className={styles.link} href={i.href}>
+                {i.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className={styles.col}>
+            <div className={styles.title}>Locations</div>
+            {locations.map((i) => (
+              <Link key={i.href} className={styles.link} href={i.href}>
+                {i.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className={styles.col}>
+            <div className={styles.title}>Company</div>
+            {company.map((i) => (
+              <Link key={i.href} className={styles.link} href={i.href}>
+                {i.label}
+              </Link>
+            ))}
+          </div>
+
+          <div className={styles.col}>
+            <div className={styles.title}>Legal</div>
+            {legal.map((i) => (
+              <Link key={i.href} className={styles.link} href={i.href}>
+                {i.label}
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.bottom}>
+        <div className={styles.rule} />
+        <div className={styles.copy}>
+          Messaging rates may apply. Reply STOP to opt out. Reply HELP for help.
+        </div>
+      </div>
+    </footer>
+  );
+}

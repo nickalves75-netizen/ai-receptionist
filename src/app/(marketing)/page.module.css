@@ -1,0 +1,865 @@
+.page{ width: 100%; background: var(--k-bg); }
+
+
+.container {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* divider should never be “white” in dark mode */
+.divider{
+  height: 1px;
+  background: var(--k-border);
+}
+
+
+/* HERO */
+.hero{
+  padding: 92px 0 70px;
+  background: var(--k-bg);
+}
+
+.heroInner { text-align: center; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(14,124,102,0.10);
+  border: 1px solid rgba(14,124,102,0.20);
+  color: var(--k-text);
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.h1 {
+  margin: 18px auto 12px;
+  max-width: 980px;
+  font-weight: 900;
+  font-size: clamp(42px, 5vw, 68px);
+  line-height: 1.06;
+  letter-spacing: -0.03em;
+  color: var(--k-text);
+}
+
+.accent { color: var(--k-brand); }
+
+.subhead {
+  margin: 0 auto;
+  max-width: 760px;
+  font-size: 18px;
+  line-height: 1.75;
+  color: var(--k-muted);
+}
+
+.heroCtas {
+  margin-top: 22px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  height: 46px;
+  padding: 0 18px;
+  border-radius: 12px;
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.btnPrimary {
+  background: var(--k-brand);
+  color: #fff;
+  box-shadow: 0 12px 26px rgba(14,124,102,0.22);
+}
+
+.btnPrimary:hover { filter: brightness(1.03); }
+
+.btnOutline {
+  background: var(--k-surface);
+  color: var(--k-text);
+  border-color: var(--k-border);
+}
+
+.btnOutline:hover { background: var(--k-soft); }
+
+.section{
+  padding: 74px 0;
+  background: var(--k-bg);
+}
+
+.h2 {
+  text-align: center;
+  font-weight: 900;
+  font-size: clamp(30px, 3.4vw, 44px);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--k-text);
+}
+
+.sectionSub {
+  text-align: center;
+  margin: 10px auto 0;
+  max-width: 740px;
+  color: var(--k-muted);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+/* Cards/boxes */
+.grid4 {
+  margin-top: 40px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 1100px) { .grid4 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .grid4 { grid-template-columns: 1fr; } }
+
+.card{
+  background:
+    radial-gradient(520px 240px at 18% 12%, var(--k-burst), transparent 70%),
+    radial-gradient(520px 240px at 82% 78%, var(--k-burst2), transparent 72%),
+    var(--k-card);
+  border: 1px solid var(--k-border);
+  color: var(--k-text);
+}
+.cardTitle{ color: var(--k-text); }
+.cardText{ color: var(--k-muted); }
+
+
+/* Randomized green burst per card */
+.grid4 .card:nth-child(1){
+  background:
+    radial-gradient(520px 240px at 18% 12%, var(--k-burst), transparent 70%),
+    var(--k-surface);
+}
+.grid4 .card:nth-child(2){
+  background:
+    radial-gradient(520px 240px at 32% 88%, var(--k-burst), transparent 70%),
+    var(--k-surface);
+}
+.grid4 .card:nth-child(3){
+  background:
+    radial-gradient(520px 240px at 82% 8%, var(--k-burst2), transparent 70%),
+    var(--k-surface);
+}
+.grid4 .card:nth-child(4){
+  background:
+    radial-gradient(520px 240px at 70% 78%, var(--k-burst2), transparent 70%),
+    var(--k-surface);
+}
+
+
+.cardIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: rgba(14,124,102,0.12);
+  border: 1px solid rgba(14,124,102,0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cardTitle {
+  margin: 14px 0 8px;
+  font-weight: 900;
+  font-size: 18px;
+  color: var(--k-text);
+  text-align: center;
+}
+
+.cardText {
+  margin: 0;
+  color: var(--k-muted);
+  font-size: 14px;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.list {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: color-mix(in srgb, var(--k-text) 82%, transparent);
+  font-size: 13px;
+  line-height: 1.9;
+}
+
+.cardLink {
+  display: inline-flex;
+  margin-top: 14px;
+  font-weight: 900;
+  color: var(--k-brand);
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.cardLink:hover { text-decoration: underline; }
+
+.cardBtn {
+  margin-top: 14px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 900;
+  color: var(--k-brand);
+  cursor: pointer;
+}
+
+/* Transformation */
+.split {
+  margin-top: 40px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+
+.panel {
+  background:
+    radial-gradient(520px 240px at 20% 0%, rgba(14,124,102,0.12), transparent 70%),
+    var(--k-surface);
+  border: 1px solid var(--k-border);
+  border-radius: 18px;
+  padding: 26px;
+  box-shadow: var(--k-shadow2);
+}
+
+.panelTitle { margin: 0; font-weight: 900; font-size: 20px; color: var(--k-text); }
+
+.panelTagBad { margin: 10px 0 0; color: rgba(220, 38, 38, 0.92); font-weight: 900; font-size: 13px; }
+.panelTagGood { margin: 10px 0 0; color: rgba(14,124,102,0.95); font-weight: 900; font-size: 13px; }
+
+.checkList {
+  margin: 16px 0 0;
+  padding-left: 18px;
+  color: color-mix(in srgb, var(--k-text) 78%, transparent);
+  line-height: 2;
+  font-size: 14px;
+}
+
+.panelFoot {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--k-border);
+  color: color-mix(in srgb, var(--k-text) 70%, transparent);
+  font-weight: 700;
+}
+.panelFootStrong { color: var(--k-text); font-weight: 900; }
+
+/* keep "Before Kallr" intentionally dark */
+/* BEFORE panel should be light gray (even in dark mode) */
+.panelDark{
+  background:
+    radial-gradient(520px 240px at 18% 12%, rgba(255,255,255,0.55), transparent 70%),
+    rgba(148,163,184,0.16) !important;
+
+  border: 1px solid rgba(148,163,184,0.22) !important;
+  border-radius: 18px;
+  padding: 26px;
+  box-shadow: var(--k-shadow);
+}
+
+/* Since it's light, keep text dark */
+.panelDark .panelTitle{ color: rgba(17,24,39,0.95) !important; }
+.panelDark .checkList{ color: rgba(17,24,39,0.78) !important; }
+.panelDark .panelFoot{ border-top-color: rgba(17,24,39,0.14) !important; color: rgba(17,24,39,0.70) !important; }
+.panelDark .panelFootStrong{ color: rgba(17,24,39,0.92) !important; }
+.panelDark .panelTagBad{ color: rgba(185,28,28,0.90) !important; }
+
+
+/* =========================
+   METRICS ROW
+   ========================= */
+.metrics{
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+
+.metrics :global(.reveal){
+  width: 100%;
+}
+
+.metric{
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  cursor: pointer;
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding: 10px 12px;
+  min-height: 64px;
+  border-radius: 14px;
+
+  background:
+    radial-gradient(520px 240px at 22% 18%, rgba(255,255,255,0.35), transparent 70%),
+    radial-gradient(420px 220px at 78% 82%, rgba(255,255,255,0.18), transparent 72%),
+    var(--k-soft);
+
+  border: 1px solid var(--k-border);
+  box-shadow:
+    0 12px 24px rgba(17,24,39,0.10),
+    0 2px 0 rgba(17,24,39,0.04);
+
+  backdrop-filter: blur(6px);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  text-align: center;
+}
+
+.metric:hover{
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 34px rgba(17,24,39,0.12),
+    0 3px 0 rgba(17,24,39,0.05);
+}
+
+.metric:focus-visible{
+  outline: 2px solid rgba(14,124,102,0.55);
+  outline-offset: 2px;
+}
+
+.metricTop{
+  font-size: 18px;
+  line-height: 1.1;
+  color: var(--k-text);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.metricBot{
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--k-muted);
+  font-weight: 600;
+}
+
+@media (max-width: 900px){
+  .metrics{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px){
+  .metrics{ grid-template-columns: 1fr; }
+}
+
+/* ZyraTalk-style grid */
+.whyGrid {
+  margin-top: 40px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+@media (max-width: 900px) { .whyGrid { grid-template-columns: 1fr; } }
+
+.whyCard {
+  background:
+    radial-gradient(420px 220px at 20% 0%, rgba(14,124,102,0.14), transparent 70%),
+    var(--k-surface);
+  border: 1px solid var(--k-border);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: var(--k-shadow2);
+}
+
+.whyIcon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(14,124,102,0.12);
+  border: 1px solid rgba(14,124,102,0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.whyTitle { margin: 12px 0 6px; font-weight: 900; font-size: 16px; color: var(--k-text); }
+.whyText { margin: 0; color: var(--k-muted); line-height: 1.7; font-size: 13px; }
+
+.whyTall {
+  background:
+    radial-gradient(520px 260px at 20% 0%, rgba(14,124,102,0.16), transparent 70%),
+    var(--k-surface);
+  border: 1px solid var(--k-border);
+  border-radius: 18px;
+  padding: 22px;
+  box-shadow: var(--k-shadow2);
+}
+
+.whyTallBadge {
+  display: inline-flex;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(14,124,102,0.12);
+  border: 1px solid rgba(14,124,102,0.22);
+  color: var(--k-text);
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.whyTallTitle { margin: 12px 0 6px; font-weight: 900; font-size: 18px; color: var(--k-text); }
+.whyTallText { margin: 0; color: var(--k-muted); line-height: 1.7; font-size: 13px; }
+
+.whyTallMiniRow {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.whyTallMini {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--k-soft);
+  border: 1px solid var(--k-divider);
+  font-weight: 800;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--k-text) 84%, transparent);
+}
+
+/* Final CTA card */
+.ctaCard {
+  background:
+    radial-gradient(900px 320px at 50% 0%, rgba(14,124,102,0.16), transparent 70%),
+    var(--k-surface);
+  border: 1px solid var(--k-border);
+  border-radius: 22px;
+  padding: 34px;
+  box-shadow: var(--k-shadow);
+  text-align: center;
+}
+
+.ctaTitle { margin: 0; font-weight: 900; font-size: clamp(22px, 2.2vw, 30px); color: var(--k-text); }
+.ctaText { margin: 10px auto 0; max-width: 720px; color: var(--k-muted); line-height: 1.75; }
+
+.ctaRow {
+  margin-top: 18px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* =========================
+   WHY SECTION: background image + glass cards
+   ========================= */
+.whySection{
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background-image: url("/kallrbuildingbackground.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 98% 20%;
+  padding-top: 72px;
+  padding-bottom: 72px;
+}
+
+/* Readability overlay — adapts by theme */
+.whySection::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(700px 420px at 72% 18%, rgba(255,255,255,0.10), transparent 62%),
+    linear-gradient(180deg, rgba(17,24,39,0.38), rgba(17,24,39,0.26));
+}
+
+:root[data-theme="dark"] .whySection::before{
+  background:
+    radial-gradient(700px 420px at 72% 18%, rgba(255,255,255,0.06), transparent 62%),
+    linear-gradient(180deg, rgba(0,0,0,0.62), rgba(0,0,0,0.42));
+}
+
+.whySection > *{
+  position: relative;
+  z-index: 1;
+}
+
+.whySection .h2{
+  color: rgba(255,255,255,0.96) !important;
+  text-shadow: 0 10px 24px rgba(0,0,0,0.25);
+}
+
+.whySection .sectionSub{
+  color: rgba(255,255,255,0.78) !important;
+  text-shadow: 0 10px 24px rgba(0,0,0,0.20);
+}
+
+/* Glass cards */
+.whySection .whyCard,
+.whySection .whyTall{
+  background:
+    radial-gradient(520px 260px at 20% 18%, rgba(255,255,255,0.75), transparent 70%),
+    rgba(255,255,255,0.58) !important;
+
+  border: 1px solid rgba(255,255,255,0.60) !important;
+  box-shadow:
+    0 22px 52px rgba(0,0,0,0.22),
+    0 0 0 1px rgba(14,124,102,0.10),
+    0 0 34px rgba(255,255,255,0.28);
+
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+:root[data-theme="dark"] .whySection .whyCard,
+:root[data-theme="dark"] .whySection .whyTall{
+  background:
+    radial-gradient(520px 260px at 20% 18%, rgba(255,255,255,0.14), transparent 70%),
+    rgba(15, 23, 42, 0.68) !important;
+
+  border: 1px solid rgba(148,163,184,0.26) !important;
+  box-shadow:
+    0 22px 52px rgba(0,0,0,0.45),
+    0 0 0 1px rgba(14,124,102,0.12);
+}
+
+.whySection .whyTitle,
+.whySection .whyTallTitle{
+  color: rgba(17,24,39,0.94) !important;
+  text-shadow: none !important;
+}
+
+.whySection .whyText,
+.whySection .whyTallText{
+  color: rgba(17,24,39,0.72) !important;
+}
+
+:root[data-theme="dark"] .whySection .whyTitle,
+:root[data-theme="dark"] .whySection .whyTallTitle{
+  color: rgba(255,255,255,0.92) !important;
+}
+
+:root[data-theme="dark"] .whySection .whyText,
+:root[data-theme="dark"] .whySection .whyTallText{
+  color: rgba(255,255,255,0.74) !important;
+}
+
+.whySection .whyTallBadge{
+  background: rgba(17,24,39,0.08) !important;
+  border: 1px solid rgba(17,24,39,0.10) !important;
+  color: rgba(17,24,39,0.78) !important;
+}
+
+:root[data-theme="dark"] .whySection .whyTallBadge{
+  background: rgba(255,255,255,0.10) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.86) !important;
+}
+
+.whySection .whyTallMini{
+  background: rgba(17,24,39,0.06) !important;
+  border: 1px solid rgba(17,24,39,0.10) !important;
+  color: rgba(17,24,39,0.80) !important;
+}
+
+:root[data-theme="dark"] .whySection .whyTallMini{
+  background: rgba(255,255,255,0.10) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  color: rgba(255,255,255,0.86) !important;
+}
+
+/* =========================
+   PERSONA + ROADMAP
+   (converted to theme vars)
+   ========================= */
+
+.personaSplit {
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 22px;
+  align-items: center;
+}
+
+@media (max-width: 920px) {
+  .personaSplit {
+    grid-template-columns: 1fr;
+  }
+}
+
+.personaFigure {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 18px;
+  background: radial-gradient(60% 60% at 50% 40%, rgba(14,124,102,0.10), rgba(255,255,255,0));
+  border: 1px solid var(--k-border);
+  box-shadow: var(--k-shadow2);
+  padding: 22px;
+}
+
+.personaBubble {
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--k-surface) 82%, transparent);
+  border: 1px solid var(--k-border);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--k-shadow2);
+  padding: 22px;
+}
+
+.personaKicker {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 800;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--k-text) 86%, transparent);
+  background: rgba(14,124,102,0.10);
+  border: 1px solid rgba(14,124,102,0.18);
+}
+
+.personaTitle {
+  margin: 12px 0 8px 0;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 900;
+  color: var(--k-text);
+}
+
+.personaText {
+  margin: 0 0 12px 0;
+  color: var(--k-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.personaList {
+  margin: 0;
+  padding-left: 18px;
+  color: color-mix(in srgb, var(--k-text) 78%, transparent);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.roadmapHead {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.roadmapKicker {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 800;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--k-text) 86%, transparent);
+  background: rgba(14,124,102,0.10);
+  border: 1px solid rgba(14,124,102,0.18);
+  margin-bottom: 10px;
+}
+
+.roadmapGrid {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 18px;
+  align-items: start;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+@media (max-width: 840px) {
+  .roadmapGrid {
+    grid-template-columns: 1fr;
+  }
+  .roadmapRail {
+    display: none;
+  }
+}
+
+.roadmapRail {
+  position: relative;
+  height: 520px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--k-surface) 70%, transparent);
+  border: 1px solid var(--k-border);
+  box-shadow: var(--k-shadow2);
+  overflow: hidden;
+}
+
+.roadmapSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.roadmapDot {
+  position: absolute;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--k-surface) 92%, transparent);
+  border: 2px solid color-mix(in srgb, var(--k-border) 70%, transparent);
+  box-shadow: 0 10px 24px rgba(2,6,23,0.10);
+}
+
+.roadmapDotActive {
+  border-color: rgba(14,124,102,0.85);
+  box-shadow: 0 12px 26px rgba(14,124,102,0.22);
+}
+
+.roadmapSteps {
+  display: grid;
+  gap: 12px;
+}
+
+.roadmapStep {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 12px;
+  padding: 16px 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--k-surface) 82%, transparent);
+  border: 1px solid var(--k-border);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 16px 40px rgba(2,6,23,0.06);
+  transform: translateY(6px);
+  opacity: 0.92;
+  transition: transform 180ms ease, opacity 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.roadmapStepActive {
+  transform: translateY(0);
+  opacity: 1;
+  border-color: rgba(14,124,102,0.22);
+  box-shadow: 0 18px 44px rgba(2,6,23,0.08);
+}
+
+.roadmapStepNum {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: color-mix(in srgb, var(--k-text) 90%, transparent);
+  background: var(--k-soft);
+  border: 1px solid var(--k-border);
+}
+
+.roadmapStepTitle {
+  font-weight: 900;
+  color: var(--k-text);
+  margin-bottom: 4px;
+}
+
+.roadmapStepBody {
+  color: var(--k-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* =========================
+   THEME-CARDS: restore burst + spacing + depth
+   Put this at the END of the file
+   ========================= */
+
+.card,
+.panel,
+.ctaCard,
+.whyCard,
+.whyTall,
+.roadmapStep,
+.personaBubble{
+  background:
+    radial-gradient(520px 260px at 18% 10%, var(--k-burst), transparent 70%),
+    radial-gradient(520px 260px at 82% 78%, var(--k-burst2), transparent 72%),
+    var(--k-card) !important;
+
+  border: 1px solid var(--k-border) !important;
+  border-radius: 18px;
+  padding: 22px;
+
+  box-shadow:
+    0 16px 34px rgba(2, 6, 23, 0.10);
+}
+
+.cardTitle,
+.panelTitle,
+.whyTitle,
+.whyTallTitle,
+.ctaTitle,
+.roadmapStepTitle,
+.personaTitle{
+  color: var(--k-text) !important;
+}
+
+.cardText,
+.subhead,
+.sectionSub,
+.whyText,
+.whyTallText,
+.panelFoot,
+.ctaText,
+.roadmapStepBody,
+.personaText{
+  color: var(--k-muted) !important;
+}
+
+/* Make borders feel less “tight” in dark mode */
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .panel,
+:root[data-theme="dark"] .ctaCard,
+:root[data-theme="dark"] .roadmapStep{
+  box-shadow:
+    0 22px 54px rgba(0,0,0,0.35);
+}
+
+/* =========================
+   TRANSFORMATION: BEFORE panel
+   Always solid gray + slight white gradient (light + dark)
+   Must override .panel !important rules
+   ========================= */
+
+.panel.panelDark{
+  background:
+    radial-gradient(720px 280px at 20% 70%, rgba(146, 146, 146, 0.55), transparent 40%),
+    radial-gradient(520px 260px at 22% 38%, rgba(53, 53, 53, 0.22), transparent 15%),
+    #242323 !important; /* solid gray base */
+  border: 1px solid rgba(15,23,42,0.12) !important;
+  box-shadow: var(--k-shadow) !important;
+}
+
+/* keep text readable on the gray panel */
+.panel.panelDark .panelTitle{ color: rgba(255, 255, 255, 0.95) !important; }
+.panel.panelDark .checkList{ color: rgba(247, 247, 247, 0.78) !important; }
+.panel.panelDark .panelFoot{
+  border-top-color: rgba(17,24,39,0.14) !important;
+  color: rgba(17,24,39,0.70) !important;
+}
+.panel.panelDark .panelFootStrong{ color: rgba(17,24,39,0.92) !important; }
+.panel.panelDark .panelTagBad{ color: rgba(245, 24, 24, 0.9) !important; }

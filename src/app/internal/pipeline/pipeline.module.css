@@ -1,0 +1,403 @@
+:root{
+  --kallr-green:#0e7a64;
+  --kallr-navy:#0b1220;
+  --kallr-gray:#6b7280;
+  --kallr-bg:#ffffff;
+  --kallr-section:#f4f6f8;
+  --kallr-border:rgba(0,0,0,0.10);
+  --kallr-card:#f7e7b6;
+}
+
+/* =========================
+   Page Header
+========================= */
+.page{ padding:18px 18px 26px; }
+
+.titleRow{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  margin-bottom:14px;
+}
+
+.h1{
+  font-size:44px;
+  line-height:1.04;
+  margin:0;
+  letter-spacing:-0.02em;
+  color:var(--kallr-navy);
+}
+
+/* =========================
+   Board (horizontal scroll)
+========================= */
+.boardWrap{
+  overflow-x:auto;
+  padding-bottom:10px;
+}
+
+.board{
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+  min-height:70vh;
+}
+
+/* =========================
+   Column (fixed viewport + inner scroll)
+========================= */
+.col{
+  min-width:320px;
+  max-width:320px;
+  height:78vh;
+
+  border-radius:18px;
+  border:1px solid var(--kallr-border);
+  background:var(--kallr-section);
+
+  padding:12px;
+
+  display:grid;
+  grid-template-rows:auto 1fr;   /* header + scroll body */
+  overflow:hidden;              /* clip inside viewport */
+}
+
+/* Header */
+.colHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:6px 6px 10px;
+}
+
+.colTitle{
+  font-weight:950;
+  letter-spacing:-0.01em;
+  color:var(--kallr-navy);
+}
+
+/* Count badge (top right) */
+.colCount{
+  width:34px;
+  height:34px;
+  border-radius:999px;
+
+  border:2px solid rgba(11,18,32,0.22);
+  background:rgba(255,255,255,0.92);
+
+  display:grid;
+  place-items:center;
+
+  font-weight:950;
+  color:var(--kallr-navy);
+  flex:0 0 auto;
+}
+
+/* Scrollable lead list inside column */
+.colScroll{
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+
+  /* IMPORTANT: stop sizing from squishing cards */
+  display:block;
+
+  padding: 2px 6px 10px 2px;
+  overscroll-behavior: contain;
+}
+
+/* Optional top/bottom fade like CRMs */
+.colScroll::before,
+.colScroll::after{
+  content:"";
+  position:sticky;
+  left:0; right:0;
+  height:14px;
+  pointer-events:none;
+  z-index:2;
+}
+
+.colScroll::before{
+  top:0;
+  background:linear-gradient(to bottom, var(--kallr-section), rgba(244,246,248,0));
+}
+
+.colScroll::after{
+  bottom:0;
+  background:linear-gradient(to top, var(--kallr-section), rgba(244,246,248,0));
+}
+
+/* Scrollbar */
+.colScroll::-webkit-scrollbar{ width:10px; }
+.colScroll::-webkit-scrollbar-thumb{
+  background:rgba(11,18,32,0.14);
+  border-radius:999px;
+  border:3px solid transparent;
+  background-clip:content-box;
+}
+.colScroll::-webkit-scrollbar-track{ background:transparent; }
+
+.emptyCol{
+  padding:10px 8px;
+  color:rgba(11,18,32,0.55);
+  font-weight:800;
+}
+
+/* =========================
+   Lead Card
+========================= */
+.card{
+  border-radius:16px;
+  border:1px solid var(--kallr-border);
+  background:rgba(255,255,255,0.88);
+  overflow:hidden;
+
+  box-shadow:0 10px 18px rgba(0,0,0,0.06);
+
+  display:flex;
+  flex-direction:column;
+  flex: 0 0 auto;
+
+  margin: 0 0 12px;
+}
+
+.card:last-child{ margin-bottom:0; }
+
+/* Company header band */
+.cardHeader{
+  border:none;
+  width:100%;
+  text-align:left;
+  background:var(--kallr-green);
+  color:#fff;
+  cursor:pointer;
+
+  padding:12px 12px 10px;
+  flex: 0 0 auto;
+}
+
+.cardCompany{
+  font-weight:950;
+  letter-spacing:-0.01em;
+  text-transform:uppercase;
+  font-size:15px;
+}
+
+/* Body rows */
+.cardBody{
+  padding:10px 12px 0;
+  flex: 0 0 auto;
+}
+
+.row{
+  display:grid;
+  grid-template-columns: 120px 1fr;
+  gap:10px;
+  align-items:start;
+  font-size:13px;
+}
+
+.rowLabel{
+  font-weight:900;
+  color:rgba(11,18,32,0.55);
+}
+
+.rowValue{
+  font-weight:950;
+  color:var(--kallr-navy);
+  overflow-wrap:anywhere;
+}
+
+.sep{
+  height:1px;
+  background:rgba(11,18,32,0.12);
+  margin:10px 0;
+}
+
+/* Expand animation (0fr -> 1fr) pushes cards below cleanly */
+.expandWrap{
+  display:grid;
+  grid-template-rows:0fr;
+  opacity:0;
+  transition:grid-template-rows 220ms ease, opacity 180ms ease;
+}
+
+.expandOpen{
+  grid-template-rows:1fr;
+  opacity:1;
+}
+
+.expandInner{
+  overflow:hidden;
+  padding:0 12px 10px;
+}
+
+/* Bottom "View more" row (pinned) */
+.viewMore{
+  border:none;
+  background:rgba(255,255,255,0.75);
+  cursor:pointer;
+
+  padding:12px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+
+  border-top:1px solid rgba(11,18,32,0.12);
+  flex: 0 0 auto;
+}
+
+.viewMoreText{
+  font-weight:950;
+  color:rgba(11,18,32,0.80);
+}
+
+.chev{
+  font-size:18px;
+  font-weight:950;
+  color:rgba(11,18,32,0.80);
+  transform:translateY(-1px);
+  transition:transform 160ms ease;
+}
+
+.viewMoreUp .chev{
+  transform:translateY(-1px) rotate(180deg);
+}
+
+/* =========================
+   Drag & Drop Feedback
+========================= */
+.colDragOver{
+  outline: 2px solid rgba(14,122,100,0.45);
+  box-shadow: 0 0 0 4px rgba(14,122,100,0.10);
+}
+
+.cardDragging{
+  opacity: 0.65;
+  transform: scale(0.995);
+}
+
+/* =========================
+   Modal (Confirm Move)
+========================= */
+.modalOverlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(11,18,32,0.44);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 18px;
+}
+
+.modalCard{
+  width: min(520px, 92vw);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.96);
+  box-shadow: 0 24px 60px rgba(0,0,0,0.22);
+  padding: 16px 16px 14px;
+}
+
+.modalTitle{
+  font-weight: 950;
+  color: var(--kallr-navy);
+  letter-spacing: -0.01em;
+  font-size: 16px;
+}
+
+.modalBody{
+  margin-top: 10px;
+  color: rgba(11,18,32,0.72);
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.modalStrong{
+  color: var(--kallr-navy);
+  font-weight: 950;
+}
+
+.modalActions{
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+/* Buttons */
+.btnPrimary{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.10);
+  background: var(--kallr-green);
+  color: #fff;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.btnPrimary:disabled{
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.btnGhost{
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.9);
+  color: rgba(11,18,32,0.78);
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.btnGhost:disabled{
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* header inner row to hold company + star */
+.cardHeaderInner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+
+/* favorite button */
+.favBtn{
+  border:none;
+  background:transparent;
+  cursor:pointer;
+  padding:6px;
+  border-radius:10px;
+  display:grid;
+  place-items:center;
+  flex:0 0 auto;
+}
+
+.favBtn:hover{
+  background: rgba(255,255,255,0.14);
+}
+
+.favBtn:focus-visible{
+  outline: 2px solid rgba(255,255,255,0.55);
+  outline-offset: 2px;
+}
+
+.favIcon{
+  width:18px;
+  height:18px;
+}
+
+/* smoother View more */
+.viewMoreText{
+  font-weight: 850;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: rgba(11,18,32,0.78);
+}

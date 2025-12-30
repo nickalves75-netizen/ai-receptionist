@@ -1,0 +1,23 @@
+.btn {
+  height: 40px;
+  width: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--k-border);
+  background: var(--k-card);
+  color: var(--k-text);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 12px 22px rgba(2, 6, 23, 0.06);
+  transition: transform 150ms ease, background 200ms ease, border-color 200ms ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  opacity: 0.92;
+}
