@@ -2,7 +2,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-function isStaffUser(user: any): boolean {
+function applySecurityHeaders(res: NextResponse) {
+  res.headers.set("X-Frame-Options", "DENY");
+  res.headers.set("X-Content-Type-Options", "nosniff");
+  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  res.headers.set("Cross-Origin-Resource-Policy", "same-site");
+  res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
+  return res;
+}
+
+function isStaffByMetadataOrAllowlist(user: any): boolean {
   const role = user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role ?? "";
   if (typeof role === "string" && ["staff", "admin", "kallr"].includes(role.toLowerCase())) return true;
 
@@ -17,24 +28,26 @@ function isStaffUser(user: any): boolean {
   return false;
 }
 
-// Safe baseline security headers (won't break Next/Supabase)
-function applySecurityHeaders(res: NextResponse) {
-  // Basic hardening
-  res.headers.set("X-Frame-Options", "DENY");
-  res.headers.set("X-Content-Type-Options", "nosniff");
-  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+async function isStaffUser(
+  supabase: ReturnType<typeof createServerClient>,
+  user: any
+): Promise<boolean> {
+  // 1) Fast pass: metadata/env allowlist
+  if (isStaffByMetadataOrAllowlist(user)) return true;
 
-  // Reduce powerful browser APIs availability by default
-  res.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // 2) Source of truth: staff_users table
+  try {
+    const { data, error } = await supabase
+      .from("staff_users")
+      .select("user_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  // Cross-origin isolation baselines
-  res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
-  res.headers.set("Cross-Origin-Resource-Policy", "same-site");
-
-  // HSTS (only meaningful on HTTPS; harmless on localhost)
-  res.headers.set("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload");
-
-  return res;
+    if (error) return false;
+    return !!data;
+  } catch {
+    return false;
+  }
 }
 
 export async function middleware(req: NextRequest) {
@@ -61,7 +74,7 @@ export async function middleware(req: NextRequest) {
     }
   );
 
-  // Refresh session + get user (this is the “real” gate)
+  // Get user (the “real” gate)
   const { data } = await supabase.auth.getUser();
   const user = data.user;
 
@@ -71,14 +84,15 @@ export async function middleware(req: NextRequest) {
       const r = NextResponse.redirect(new URL("/internal/login", req.url));
       return applySecurityHeaders(r);
     }
-    if (!isStaffUser(user)) {
+
+    const ok = await isStaffUser(supabase, user);
+    if (!ok) {
       const r = NextResponse.redirect(new URL("/", req.url));
       return applySecurityHeaders(r);
     }
   }
 
   // CUSTOMER PORTAL protection
-  // Allow the portal login route publicly; protect everything else under /portal
   if (pathname.startsWith("/portal")) {
     const isPortalLogin = pathname === "/portal/login";
     if (!isPortalLogin && !user) {
