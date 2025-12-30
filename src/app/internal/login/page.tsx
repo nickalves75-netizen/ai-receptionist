@@ -77,7 +77,7 @@ export default function InternalLoginPage() {
       const user = u.user;
 
       if (isStaffUser(user)) router.replace("/internal");
-      else router.replace("/app");
+      else router.replace("/internal/overview");
     } catch (err: any) {
       setMsg(err?.message ?? "Login failed.");
     } finally {
