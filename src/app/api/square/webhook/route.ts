@@ -1,61 +1,67 @@
 // src/app/api/square/webhook/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import crypto from "crypto";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+// Ensure Node runtime (we use node:crypto)
 export const runtime = "nodejs";
 
-// Set this in your env (Square webhook signature key):
-// - SQUARE_WEBHOOK_SIGNATURE_KEY
-// Optional (only if you want to force a specific URL for signature calc):
-// - SQUARE_WEBHOOK_URL (example: https://kallr.solutions/api/square/webhook)
-
 function constantTimeEqual(a: string, b: string) {
-  if (a.length !== b.length) return false;
-  let out = 0;
-  for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return out === 0;
+  if (!a || !b) return false;
+  const aBuf = Buffer.from(a);
+  const bBuf = Buffer.from(b);
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
-function getPublicUrl(req: NextRequest) {
-  const forced = process.env.SQUARE_WEBHOOK_URL;
-  if (forced) return forced;
-
-  // Build a stable public URL (Vercel / proxies)
-  const proto = req.headers.get("x-forwarded-proto") || "https";
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "";
-  const path = req.nextUrl.pathname;
-  return `${proto}://${host}${path}`;
-}
-
-function computeSquareSignature(signatureKey: string, notificationUrl: string, body: string) {
-  const hmac = crypto.createHmac("sha256", signatureKey);
-  hmac.update(notificationUrl + body, "utf8");
-  return hmac.digest("base64");
+function computeSquareSignature(notificationUrl: string, rawBody: string, signatureKey: string) {
+  // Square: base64(hmac_sha256(notification_url + body, signature_key))
+  const payload = `${notificationUrl}${rawBody}`;
+  return crypto.createHmac("sha256", signatureKey).update(payload, "utf8").digest("base64");
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, route: "square/webhook" });
+  return new Response("SQUARE WEBHOOK OK", { status: 200 });
 }
 
 export async function POST(req: NextRequest) {
-  // 1) Read raw body (Square signature requires raw)
-  const raw = await req.text().catch(() => "");
-  if (!raw) return NextResponse.json({ ok: false, error: "Empty body" }, { status: 400 });
+  // Read raw body (must be raw for signature verification)
+  const rawBody = await req.text().catch(() => "");
 
-  // 2) Verify signature (recommended)
+  // Square signature header
+  const receivedSig = req.headers.get("x-square-hmacsha256-signature") || "";
+
+  // These two env vars should be set in Vercel (recommended)
   const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY || "";
-  const provided = req.headers.get("x-square-hmacsha256-signature") || "";
+  const notificationUrl = process.env.SQUARE_WEBHOOK_NOTIFICATION_URL || "";
 
-  if (signatureKey) {
-    const notificationUrl = getPublicUrl(req);
-    const expected = computeSquareSignature(signatureKey, notificationUrl, raw);
-
-    if (!provided || !constantTimeEqual(provided, expected)) {
-      return NextResponse.json({ ok: false, error: "Invalid signature" }, { status: 401 });
+  // If envs are set, verify; if not set, allow (so you don’t block prod unexpectedly)
+  if (signatureKey && notificationUrl) {
+    const expectedSig = computeSquareSignature(notificationUrl, rawBody, signatureKey);
+    if (!constantTimeEqual(receivedSig, expectedSig)) {
+      return new Response("Unauthorized", { status: 401 });
     }
   }
 
-  // 3) If you don’t need to process events yet, just ACK fast
-  // (Square expects a quick 200)
-  return NextResponse.json({ ok: true });
+  // Parse JSON if possible (Square webhooks are JSON)
+  let body: any = null;
+  try {
+    body = rawBody ? JSON.parse(rawBody) : null;
+  } catch {
+    body = null;
+  }
+
+  // Optional: log/store for debugging (safe even if you don’t use it yet)
+  try {
+    await supabaseAdmin.from("square_webhook_events").insert({
+      received_at: new Date().toISOString(),
+      event_type: body?.type ?? null,
+      event_id: body?.event_id ?? body?.eventId ?? null,
+      payload: body ?? { raw: rawBody },
+    });
+  } catch {
+    // Ignore DB errors so Square still gets 200 and doesn't retry forever
+  }
+
+  return new Response("OK", { status: 200 });
 }
