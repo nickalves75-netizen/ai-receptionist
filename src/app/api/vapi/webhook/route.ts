@@ -4,19 +4,33 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 const WEBHOOK_VERSION = "v2-2025-12-29";
 const MAX_BODY_BYTES = 1_000_000; // 1MB safety
 
+function withCors(req: NextRequest, res: Response) {
+  const origin = req.headers.get("origin") || "*";
+  const headers = new Headers(res.headers);
+
+  headers.set("Access-Control-Allow-Origin", origin);
+  headers.set("Vary", "Origin");
+  headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  headers.set(
+    "Access-Control-Allow-Headers",
+    "content-type, x-kallr-webhook-secret, x-vapi-webhook-secret"
+  );
+  headers.set("Access-Control-Max-Age", "86400");
+
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return withCors(req, new Response(null, { status: 204 }));
+}
+
 function requireEnv(name: string): string {
   const v = process.env[name];
   if (!v) throw new Error(`Missing ${name}`);
   return v;
 }
 
-function safeStr(v: any) {
-  if (v === null || v === undefined) return "";
-  return String(v);
-}
-
 function constantTimeEqual(a: string, b: string) {
-  // Simple constant-time-ish compare to avoid timing attacks (good enough for this use)
   if (a.length !== b.length) return false;
   let out = 0;
   for (let i = 0; i < a.length; i++) out |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -25,20 +39,17 @@ function constantTimeEqual(a: string, b: string) {
 
 function authorized(req: NextRequest) {
   const secret = process.env.VAPI_WEBHOOK_SECRET;
-  if (!secret) return true; // if not set, don't block (but you SHOULD set it before go-live)
+  if (!secret) return true; // allow if not configured (dev), but set it for prod
 
-  // Prefer header
   const headerSecret =
     req.headers.get("x-kallr-webhook-secret") ||
     req.headers.get("x-vapi-webhook-secret") ||
     "";
 
-  // Optional fallback: query param (use only if Vapi can't send custom headers)
   const urlSecret = req.nextUrl.searchParams.get("secret") || "";
-
   const provided = headerSecret || urlSecret;
-  if (!provided) return false;
 
+  if (!provided) return false;
   return constantTimeEqual(provided, secret);
 }
 
@@ -103,23 +114,21 @@ function truncateForStorage(obj: any, maxChars = 20_000) {
   }
 }
 
-export async function GET() {
-  return new Response(`VAPI WEBHOOK OK (${WEBHOOK_VERSION})`, { status: 200 });
+export async function GET(req: NextRequest) {
+  return withCors(req, new Response(`VAPI WEBHOOK OK (${WEBHOOK_VERSION})`, { status: 200 }));
 }
 
 export async function POST(req: NextRequest) {
-  // 0) Require shared secret
+  // Always respond with CORS headers (even on auth failures), so browser tools can show the real error.
   if (!authorized(req)) {
-    // 401 is correct; prevents random internet spam from writing to your DB
-    return new Response("Unauthorized", { status: 401 });
+    return withCors(req, new Response("Unauthorized", { status: 401 }));
   }
 
   const fallbackBusinessId = requireEnv("DEFAULT_BUSINESS_ID");
 
-  // 1) Read body safely
   const raw = await req.text().catch(() => "");
-  if (!raw) return new Response("Bad Request", { status: 400 });
-  if (raw.length > MAX_BODY_BYTES) return new Response("Payload too large", { status: 413 });
+  if (!raw) return withCors(req, new Response("Bad Request", { status: 400 }));
+  if (raw.length > MAX_BODY_BYTES) return withCors(req, new Response("Payload too large", { status: 413 }));
 
   const body = (() => {
     try {
@@ -128,9 +137,8 @@ export async function POST(req: NextRequest) {
       return null;
     }
   })();
-  if (!body) return new Response("Bad Request", { status: 400 });
+  if (!body) return withCors(req, new Response("Bad Request", { status: 400 }));
 
-  // Vapi often sends: { message: { type, call, phoneNumber, artifact, ... } }
   const msg = body?.message ?? body;
   const eventType: string | null = msg?.type ?? null;
   const call = msg?.call ?? body?.call ?? null;
@@ -141,19 +149,22 @@ export async function POST(req: NextRequest) {
     call?.transport?.callSid ?? call?.phoneCallProviderId ?? msg?.callSid ?? body?.callSid ?? null;
 
   const callKey = (twilioCallSid ?? vapiCallId) ? String(twilioCallSid ?? vapiCallId) : null;
+  if (!callKey) return withCors(req, new Response("OK (no call key)", { status: 200 }));
 
-  // If we can't identify the call, do NOT write junk rows
-  if (!callKey) return new Response("OK (no call key)", { status: 200 });
-
-  const vapiPhoneNumberId: string | null = msg?.phoneNumber?.id ?? call?.phoneNumberId ?? call?.phoneNumber?.id ?? null;
+  const vapiPhoneNumberId: string | null =
+    msg?.phoneNumber?.id ?? call?.phoneNumberId ?? call?.phoneNumber?.id ?? null;
 
   const toNumber: string | null =
     msg?.phoneNumber?.number ?? call?.phoneNumber?.number ?? call?.to ?? body?.to ?? null;
 
-  const fromNumber: string | null = call?.customer?.number ?? msg?.customer?.number ?? body?.from ?? null;
+  const fromNumber: string | null =
+    call?.customer?.number ?? msg?.customer?.number ?? body?.from ?? null;
 
-  const startedAt: string | null = call?.startedAt ?? msg?.startedAt ?? body?.startedAt ?? call?.createdAt ?? null;
-  const endedAt: string | null = call?.endedAt ?? msg?.endedAt ?? body?.endedAt ?? null;
+  const startedAt: string | null =
+    call?.startedAt ?? msg?.startedAt ?? body?.startedAt ?? call?.createdAt ?? null;
+
+  const endedAt: string | null =
+    call?.endedAt ?? msg?.endedAt ?? body?.endedAt ?? null;
 
   const artifact = msg?.artifact ?? call?.artifact ?? null;
   const transcriptRaw = artifact?.transcript ?? call?.transcript ?? msg?.transcript ?? null;
@@ -169,7 +180,6 @@ export async function POST(req: NextRequest) {
 
   const status = endedAt ? "completed" : "handled";
 
-  // 2) Store call immediately (store truncated payload to avoid giant rows)
   const { data: rows, error } = await supabaseAdmin
     .from("calls")
     .upsert(
@@ -187,14 +197,6 @@ export async function POST(req: NextRequest) {
           source: "vapi",
           webhook_version: WEBHOOK_VERSION,
           event_type: eventType,
-          extracted: {
-            callKey,
-            twilioCallSid: twilioCallSid ? String(twilioCallSid) : null,
-            vapiCallId: vapiCallId ? String(vapiCallId) : null,
-            vapiPhoneNumberId: vapiPhoneNumberId ? String(vapiPhoneNumberId) : null,
-            fromNumber: fromNumber ? String(fromNumber) : null,
-            toNumber: toNumber ? String(toNumber) : null,
-          },
           raw_truncated: truncateForStorage(body),
         },
         started_at: startedAt ? new Date(startedAt).toISOString() : null,
@@ -205,9 +207,8 @@ export async function POST(req: NextRequest) {
     .select("id, business_id, vapi_call_id")
     .limit(1);
 
-  if (error) return new Response(`DB error: ${error.message}`, { status: 500 });
+  if (error) return withCors(req, new Response(`DB error: ${error.message}`, { status: 500 }));
 
-  // 3) If ended and we have vapi call id, enrich shortly after
   const callRow = rows?.[0];
   const vapiIdForFetch = callRow?.vapi_call_id ?? (vapiCallId ? String(vapiCallId) : null);
 
@@ -246,5 +247,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return new Response("OK", { status: 200 });
+  return withCors(req, new Response("OK", { status: 200 }));
 }
