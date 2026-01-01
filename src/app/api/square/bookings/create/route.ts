@@ -2,6 +2,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+export const runtime = "nodejs";
+
 function getEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env var: ${name}`);
@@ -27,7 +29,6 @@ type Body = {
   start_at: string;
   location_id?: string;
 
-  // Vapi UI workaround: we allow OBJECT or ARRAY or JSON STRING
   appointment_segments?: Segment[] | Segment | string;
   availability_segments?: Segment[] | Segment | string;
 
@@ -53,7 +54,6 @@ function normalizeSegments(input: any): Segment[] | null {
   return null;
 }
 
-// ✅ Stricter email cleaning to avoid Square INVALID_REQUEST_ERROR
 function cleanEmail(raw?: string) {
   const s = (raw ?? "").trim();
   if (!s) return undefined;
@@ -62,13 +62,8 @@ function cleanEmail(raw?: string) {
   const junk = ["n/a", "na", "none", "null", "undefined", "no", "noemail", "no email"];
   if (junk.includes(lower)) return undefined;
 
-  // basic format
   const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
   if (!ok) return undefined;
-
-  // avoid common test domains that some providers reject
-  const domain = lower.split("@")[1] || "";
-  if (["example.com", "example.net", "example.org"].includes(domain)) return undefined;
 
   return s;
 }
@@ -82,6 +77,20 @@ function cleanPhone(raw?: string) {
   if (junk.includes(lower)) return undefined;
 
   return s;
+}
+
+function maskEmail(email?: string) {
+  if (!email) return undefined;
+  const [u, d] = email.split("@");
+  if (!u || !d) return "***";
+  return `${u.slice(0, 2)}***@${d}`;
+}
+
+function maskPhone(phone?: string) {
+  if (!phone) return undefined;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 4) return "***";
+  return `***${digits.slice(-4)}`;
 }
 
 function isEmailInvalidSquareError(details: any): boolean {
@@ -99,7 +108,7 @@ async function squareJson(url: string, opts: RequestInit) {
 async function findOrCreateSquareCustomer(params: {
   accessToken: string;
   customer: CustomerBody;
-  debugId?: string;
+  debugId: string;
 }) {
   const { accessToken, customer, debugId } = params;
 
@@ -130,27 +139,21 @@ async function findOrCreateSquareCustomer(params: {
     if (searchRes.ok) {
       const found = searchJson?.customers?.[0]?.id;
       if (found) return found as string;
-    } else {
-      // Safe debug
-      if (process.env.KALLR_DEBUG_SQUARE === "1") {
-        console.error("[square][customer_search_failed]", debugId, {
-          status: searchRes.status,
-          details: searchJson,
-        });
-      }
-      // continue to create
+    } else if (process.env.KALLR_DEBUG_SQUARE === "1") {
+      console.error("[square][customer_search_failed]", debugId, {
+        status: searchRes.status,
+        details: searchJson,
+      });
     }
   }
 
   // Create customer
-  const createBodyBase: any = {
+  const base: any = {
     given_name: (customer.first_name || "").trim(),
     family_name: (customer.last_name || "").trim() || undefined,
     phone_number: phone,
   };
-
-  // 1) Try with email (only if valid)
-  if (email) createBodyBase.email_address = email;
+  if (email) base.email_address = email;
 
   const { res: createRes1, json: createJson1 } = await squareJson(
     "https://connect.squareup.com/v2/customers",
@@ -161,15 +164,15 @@ async function findOrCreateSquareCustomer(params: {
         "Content-Type": "application/json",
         "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
       },
-      body: JSON.stringify(createBodyBase),
+      body: JSON.stringify(base),
     }
   );
 
   if (createRes1.ok && createJson1?.customer?.id) return createJson1.customer.id as string;
 
-  // 2) If Square says email invalid, retry WITHOUT email (this fixes real calls)
+  // If email is the reason, retry without email (this prevents real-call failures)
   if (email && isEmailInvalidSquareError(createJson1)) {
-    const retryBody = { ...createBodyBase };
+    const retryBody = { ...base };
     delete retryBody.email_address;
 
     const { res: createRes2, json: createJson2 } = await squareJson(
@@ -196,11 +199,12 @@ async function findOrCreateSquareCustomer(params: {
     if (createRes2.ok && createJson2?.customer?.id) return createJson2.customer.id as string;
   }
 
+  // Full log (only when debug is on)
   if (process.env.KALLR_DEBUG_SQUARE === "1") {
     console.error("[square][customer_create_failed]", debugId, {
       status: createRes1.status,
       details: createJson1,
-      sentEmail: email ? true : false,
+      sentEmail: !!email,
     });
   }
 
@@ -210,8 +214,13 @@ async function findOrCreateSquareCustomer(params: {
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as Body | null;
 
+  const debugId = `bk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
   if (!body?.client_id || !body?.start_at || !body?.customer?.first_name) {
-    return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Missing required fields", debug_id: debugId },
+      { status: 400 }
+    );
   }
 
   const segments =
@@ -220,28 +229,25 @@ export async function POST(req: Request) {
 
   if (!segments || segments.length === 0) {
     return NextResponse.json(
-      { ok: false, error: "Must provide appointment_segments or availability_segments" },
+      { ok: false, error: "Must provide appointment_segments or availability_segments", debug_id: debugId },
       { status: 400 }
     );
   }
 
-  // safe debug id for correlating logs
-  const debugId = `lux_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-
-  // Safe request logging (NO tokens)
+  // Safe request log (no tokens; masked PII)
   if (process.env.KALLR_DEBUG_SQUARE === "1") {
     console.info("[square][booking_request]", debugId, {
       client_id: body.client_id,
       start_at: body.start_at,
-      location_id: body.location_id,
+      location_id: body.location_id || null,
+      segments_count: segments.length,
       customer: {
         first_name: body.customer?.first_name,
         last_name: body.customer?.last_name,
-        phone: body.customer?.phone,
-        email: body.customer?.email,
+        phone: maskPhone(body.customer?.phone),
+        email: maskEmail(body.customer?.email),
+        email_present: !!(body.customer?.email || "").trim(),
       },
-      notes_len: (body.notes || "").length,
-      segments_count: segments.length,
     });
   }
 
@@ -257,14 +263,14 @@ export async function POST(req: Request) {
 
   if (clientErr || !client?.square_access_token) {
     return NextResponse.json(
-      { ok: false, error: "Client missing Square connection", details: clientErr },
+      { ok: false, error: "Client missing Square connection", details: clientErr, debug_id: debugId },
       { status: 400 }
     );
   }
 
   const locationId = (body.location_id || client.square_location_id || "").trim();
   if (!locationId) {
-    return NextResponse.json({ ok: false, error: "Missing location_id" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Missing location_id", debug_id: debugId }, { status: 400 });
   }
 
   const customerId = await findOrCreateSquareCustomer({
@@ -275,7 +281,7 @@ export async function POST(req: Request) {
 
   if (!customerId) {
     return NextResponse.json(
-      { ok: false, error: "Failed to create/find Square customer" },
+      { ok: false, error: "Failed to create/find Square customer", debug_id: debugId },
       { status: 500 }
     );
   }
@@ -305,17 +311,17 @@ export async function POST(req: Request) {
   });
 
   if (!res.ok) {
-    if (process.env.KALLR_DEBUG_SQUARE === "1") {
-      console.error("[square][booking_create_failed]", debugId, {
-        status: res.status,
-        details: json,
-      });
-    }
+    // ✅ This is what you need — prints the full Square error JSON into Vercel logs
+    console.error("[square][booking_create_failed]", debugId, {
+      status: res.status,
+      details: json,
+    });
+
     return NextResponse.json(
-      { ok: false, error: "Square booking create failed", details: json },
+      { ok: false, error: "Square booking create failed", details: json, debug_id: debugId },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({ ok: true, booking: json });
+  return NextResponse.json({ ok: true, booking: json, debug_id: debugId });
 }
