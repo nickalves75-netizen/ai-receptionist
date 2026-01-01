@@ -13,7 +13,7 @@ function getEnv(name: string) {
 type CustomerBody = {
   first_name: string;
   last_name?: string;
-  phone?: string; // E.164 preferred +1...
+  phone?: string;
   email?: string;
 };
 
@@ -57,46 +57,21 @@ function normalizeSegments(input: any): Segment[] | null {
 function cleanEmail(raw?: string) {
   const s = (raw ?? "").trim();
   if (!s) return undefined;
-
   const lower = s.toLowerCase();
   const junk = ["n/a", "na", "none", "null", "undefined", "no", "noemail", "no email"];
   if (junk.includes(lower)) return undefined;
-
   const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
   if (!ok) return undefined;
-
   return s;
 }
 
 function cleanPhone(raw?: string) {
   const s = (raw ?? "").trim();
   if (!s) return undefined;
-
   const lower = s.toLowerCase();
   const junk = ["n/a", "na", "none", "null", "undefined", "no", "nophone", "no phone"];
   if (junk.includes(lower)) return undefined;
-
   return s;
-}
-
-function maskEmail(email?: string) {
-  if (!email) return undefined;
-  const [u, d] = email.split("@");
-  if (!u || !d) return "***";
-  return `${u.slice(0, 2)}***@${d}`;
-}
-
-function maskPhone(phone?: string) {
-  if (!phone) return undefined;
-  const digits = phone.replace(/\D/g, "");
-  if (digits.length < 4) return "***";
-  return `***${digits.slice(-4)}`;
-}
-
-function isEmailInvalidSquareError(details: any): boolean {
-  const errs = details?.errors;
-  if (!Array.isArray(errs)) return false;
-  return errs.some((e: any) => (e?.field || "").toLowerCase() === "email");
 }
 
 async function squareJson(url: string, opts: RequestInit) {
@@ -115,13 +90,11 @@ async function findOrCreateSquareCustomer(params: {
   const email = cleanEmail(customer.email);
   const phone = cleanPhone(customer.phone);
 
-  // Search using ONE identifier only (email preferred)
+  // Try search by ONE identifier (email preferred)
   if (email || phone) {
-    const searchFilter = email
+    const filter = email
       ? { email_address: { exact: email } }
-      : phone
-      ? { phone_number: { exact: phone } }
-      : {};
+      : { phone_number: { exact: phone } };
 
     const { res: searchRes, json: searchJson } = await squareJson(
       "https://connect.squareup.com/v2/customers/search",
@@ -132,14 +105,14 @@ async function findOrCreateSquareCustomer(params: {
           "Content-Type": "application/json",
           "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
         },
-        body: JSON.stringify({ query: { filter: searchFilter }, limit: 1 }),
+        body: JSON.stringify({ query: { filter }, limit: 1 }),
       }
     );
 
     if (searchRes.ok) {
       const found = searchJson?.customers?.[0]?.id;
       if (found) return found as string;
-    } else if (process.env.KALLR_DEBUG_SQUARE === "1") {
+    } else {
       console.error("[square][customer_search_failed]", debugId, {
         status: searchRes.status,
         details: searchJson,
@@ -147,15 +120,18 @@ async function findOrCreateSquareCustomer(params: {
     }
   }
 
-  // Create customer
-  const base: any = {
+  // Create (email optional; phone optional)
+  const payload: any = {
     given_name: (customer.first_name || "").trim(),
     family_name: (customer.last_name || "").trim() || undefined,
+    email_address: email,
     phone_number: phone,
   };
-  if (email) base.email_address = email;
 
-  const { res: createRes1, json: createJson1 } = await squareJson(
+  // Remove undefined fields
+  Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
+
+  const { res: createRes, json: createJson } = await squareJson(
     "https://connect.squareup.com/v2/customers",
     {
       method: "POST",
@@ -164,57 +140,28 @@ async function findOrCreateSquareCustomer(params: {
         "Content-Type": "application/json",
         "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
       },
-      body: JSON.stringify(base),
+      body: JSON.stringify(payload),
     }
   );
 
-  if (createRes1.ok && createJson1?.customer?.id) return createJson1.customer.id as string;
-
-  // If email is the reason, retry without email (this prevents real-call failures)
-  if (email && isEmailInvalidSquareError(createJson1)) {
-    const retryBody = { ...base };
-    delete retryBody.email_address;
-
-    const { res: createRes2, json: createJson2 } = await squareJson(
-      "https://connect.squareup.com/v2/customers",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
-        },
-        body: JSON.stringify(retryBody),
-      }
-    );
-
-    if (process.env.KALLR_DEBUG_SQUARE === "1") {
-      console.error("[square][customer_create_email_invalid_retry]", debugId, {
-        firstAttempt: createJson1,
-        secondStatus: createRes2.status,
-        secondAttempt: createJson2,
-      });
-    }
-
-    if (createRes2.ok && createJson2?.customer?.id) return createJson2.customer.id as string;
+  if (createRes.ok) {
+    const id = createJson?.customer?.id;
+    if (id) return id as string;
   }
 
-  // Full log (only when debug is on)
-  if (process.env.KALLR_DEBUG_SQUARE === "1") {
-    console.error("[square][customer_create_failed]", debugId, {
-      status: createRes1.status,
-      details: createJson1,
-      sentEmail: !!email,
-    });
-  }
+  console.error("[square][customer_create_failed]", debugId, {
+    status: createRes.status,
+    details: createJson,
+    sent: { hasEmail: !!email, hasPhone: !!phone },
+  });
 
   return null;
 }
 
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => null)) as Body | null;
-
   const debugId = `bk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  const body = (await req.json().catch(() => null)) as Body | null;
 
   if (!body?.client_id || !body?.start_at || !body?.customer?.first_name) {
     return NextResponse.json(
@@ -232,23 +179,6 @@ export async function POST(req: Request) {
       { ok: false, error: "Must provide appointment_segments or availability_segments", debug_id: debugId },
       { status: 400 }
     );
-  }
-
-  // Safe request log (no tokens; masked PII)
-  if (process.env.KALLR_DEBUG_SQUARE === "1") {
-    console.info("[square][booking_request]", debugId, {
-      client_id: body.client_id,
-      start_at: body.start_at,
-      location_id: body.location_id || null,
-      segments_count: segments.length,
-      customer: {
-        first_name: body.customer?.first_name,
-        last_name: body.customer?.last_name,
-        phone: maskPhone(body.customer?.phone),
-        email: maskEmail(body.customer?.email),
-        email_present: !!(body.customer?.email || "").trim(),
-      },
-    });
   }
 
   const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
@@ -273,32 +203,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Missing location_id", debug_id: debugId }, { status: 400 });
   }
 
+  // Attempt customer create, but DO NOT block booking if it fails
   const customerId = await findOrCreateSquareCustomer({
     accessToken: client.square_access_token,
     customer: body.customer,
     debugId,
   });
 
-  if (!customerId) {
-    return NextResponse.json(
-      { ok: false, error: "Failed to create/find Square customer", debug_id: debugId },
-      { status: 500 }
-    );
-  }
-
   const idempotencyKey =
     (globalThis as any)?.crypto?.randomUUID?.() || `kallr_${Date.now()}_${Math.random()}`;
 
-  const payload: any = {
-    idempotency_key: idempotencyKey,
-    booking: {
-      start_at: body.start_at,
-      location_id: locationId,
-      customer_id: customerId,
-      appointment_segments: segments,
-      customer_note: (body.notes || "").trim() || undefined,
-    },
+  // Always include a note with customer details so the booking is useful even without customer_id
+  const fallbackNoteParts = [
+    `Name: ${(body.customer.first_name || "").trim()} ${(body.customer.last_name || "").trim()}`.trim(),
+    body.customer.phone ? `Phone: ${body.customer.phone}` : null,
+    body.customer.email ? `Email: ${body.customer.email}` : null,
+    body.notes ? `Notes: ${body.notes}` : null,
+  ].filter(Boolean);
+
+  const booking: any = {
+    start_at: body.start_at,
+    location_id: locationId,
+    appointment_segments: segments,
+    customer_note: fallbackNoteParts.join(" | ") || undefined,
   };
+
+  if (customerId) booking.customer_id = customerId;
+
+  const payload: any = { idempotency_key: idempotencyKey, booking };
 
   const { res, json } = await squareJson("https://connect.squareup.com/v2/bookings", {
     method: "POST",
@@ -311,10 +243,10 @@ export async function POST(req: Request) {
   });
 
   if (!res.ok) {
-    // ✅ This is what you need — prints the full Square error JSON into Vercel logs
     console.error("[square][booking_create_failed]", debugId, {
       status: res.status,
       details: json,
+      had_customer_id: !!customerId,
     });
 
     return NextResponse.json(
