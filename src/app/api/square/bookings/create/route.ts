@@ -1,6 +1,7 @@
 // src/app/api/square/bookings/create/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logApiEvent } from "@/lib/apiEventLog";
 
 function getEnv(name: string) {
   const v = process.env[name];
@@ -36,9 +37,6 @@ type Body = {
 
   // optional: to make booking deterministic
   team_member_id?: string;
-
-  // optional: if caller already has availability results, they can pass it here (stringified JSON)
-  // but we do not require it.
 };
 
 function isValidEmail(email: string) {
@@ -184,23 +182,66 @@ async function squareAvailabilitySearch(params: {
 
 export async function POST(req: Request) {
   const debugId =
-    (globalThis as any)?.crypto?.randomUUID?.() || `bk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    (globalThis as any)?.crypto?.randomUUID?.() ||
+    `bk_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
   const body = (await req.json().catch(() => null)) as Body | null;
 
+  // log request (safe summary)
+  await logApiEvent({
+    route: "square.bookings.create",
+    client_id: body?.client_id,
+    ok: undefined,
+    debug_id: debugId,
+    request: {
+      start_at: body?.start_at,
+      location_id: body?.location_id,
+      has_segments: !!(body?.appointment_segments || body?.availability_segments),
+      customer: {
+        first_name: body?.customer?.first_name,
+        last_name: body?.customer?.last_name,
+        has_email: !!body?.customer?.email,
+        has_phone: !!body?.customer?.phone,
+      },
+    },
+  });
+
   if (!body?.client_id || !body?.start_at || !body?.customer?.first_name) {
-    return NextResponse.json({ ok: false, error: "Missing required fields", debug_id: debugId }, { status: 400 });
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body?.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 400,
+      response: { error: "Missing required fields" },
+    });
+
+    return NextResponse.json(
+      { ok: false, error: "Missing required fields", debug_id: debugId },
+      { status: 400 }
+    );
   }
 
-  // We need variation IDs for an availability check.
-  // We can derive them from provided segments.
   const segments =
     normalizeSegments(body.appointment_segments) ||
     normalizeSegments(body.availability_segments);
 
   if (!segments || segments.length === 0) {
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 400,
+      response: { error: "Must provide appointment_segments or availability_segments" },
+    });
+
     return NextResponse.json(
-      { ok: false, error: "Must provide appointment_segments or availability_segments", debug_id: debugId },
+      {
+        ok: false,
+        error: "Must provide appointment_segments or availability_segments",
+        debug_id: debugId,
+      },
       { status: 400 }
     );
   }
@@ -216,6 +257,15 @@ export async function POST(req: Request) {
     .single();
 
   if (clientErr || !client?.square_access_token) {
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 400,
+      response: { error: "Client missing Square connection", details: clientErr },
+    });
+
     return NextResponse.json(
       { ok: false, error: "Client missing Square connection", details: clientErr, debug_id: debugId },
       { status: 400 }
@@ -224,16 +274,28 @@ export async function POST(req: Request) {
 
   const locationId = (body.location_id || client.square_location_id || "").trim();
   if (!locationId) {
-    return NextResponse.json({ ok: false, error: "Missing location_id", debug_id: debugId }, { status: 400 });
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 400,
+      response: { error: "Missing location_id" },
+    });
+
+    return NextResponse.json(
+      { ok: false, error: "Missing location_id", debug_id: debugId },
+      { status: 400 }
+    );
   }
 
-  // ---- Availability-locking ----
-  // We re-check availability around the requested time and only book a returned slot.
-  // Window: start_at - 30m to start_at + 8h (clamped to future).
+  // Availability-locking
   const requested = new Date(body.start_at);
   const requestedIso = Number.isNaN(requested.getTime()) ? nowPlusMinutesIso(10) : requested.toISOString();
 
-  const windowStart = new Date(Math.max(new Date(addMinutesIso(requestedIso, -30)).getTime(), Date.now() + 5 * 60 * 1000)).toISOString();
+  const windowStart = new Date(
+    Math.max(new Date(addMinutesIso(requestedIso, -30)).getTime(), Date.now() + 5 * 60 * 1000)
+  ).toISOString();
   const windowEnd = addMinutesIso(windowStart, 8 * 60);
 
   const segmentFilters = segments.map((s) => ({ service_variation_id: s.service_variation_id }));
@@ -248,6 +310,15 @@ export async function POST(req: Request) {
   });
 
   if (!availAttempt.ok) {
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 500,
+      response: { error: "Square availability failed", details: availAttempt.json },
+    });
+
     return NextResponse.json(
       { ok: false, error: "Square availability failed", details: availAttempt.json, debug_id: debugId },
       { status: 500 }
@@ -256,13 +327,26 @@ export async function POST(req: Request) {
 
   const slots: any[] = Array.isArray(availAttempt.json?.availabilities) ? availAttempt.json.availabilities : [];
   if (slots.length === 0) {
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 409,
+      response: { error: "No availability near requested time", windowStart, windowEnd },
+    });
+
     return NextResponse.json(
-      { ok: false, error: "No availability near requested time", details: { windowStart, windowEnd }, debug_id: debugId },
+      {
+        ok: false,
+        error: "No availability near requested time",
+        details: { windowStart, windowEnd },
+        debug_id: debugId,
+      },
       { status: 409 }
     );
   }
 
-  // Prefer exact match on start_at; else choose the soonest slot after requested time.
   let chosen = slots.find((s) => s?.start_at === requestedIso);
   if (!chosen) {
     const reqMs = new Date(requestedIso).getTime();
@@ -276,6 +360,15 @@ export async function POST(req: Request) {
 
   const chosenSegments = chosen?.appointment_segments;
   if (!chosen?.start_at || !chosenSegments) {
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 500,
+      response: { error: "Square returned invalid availability slot", chosen },
+    });
+
     return NextResponse.json(
       { ok: false, error: "Square returned invalid availability slot", details: chosen, debug_id: debugId },
       { status: 500 }
@@ -289,6 +382,15 @@ export async function POST(req: Request) {
   });
 
   if (!customerId) {
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 500,
+      response: { error: "Failed to create/find Square customer" },
+    });
+
     return NextResponse.json(
       { ok: false, error: "Failed to create/find Square customer", debug_id: debugId },
       { status: 500 }
@@ -322,11 +424,33 @@ export async function POST(req: Request) {
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    await logApiEvent({
+      route: "square.bookings.create",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 500,
+      response: { error: "Square booking create failed", details: json },
+    });
+
     return NextResponse.json(
       { ok: false, error: "Square booking create failed", details: json, debug_id: debugId },
       { status: 500 }
     );
   }
+
+  await logApiEvent({
+    route: "square.bookings.create",
+    client_id: body.client_id,
+    ok: true,
+    debug_id: debugId,
+    status_code: 200,
+    response: {
+      booking_id: json?.booking?.id || json?.booking?.booking?.id || null,
+      status: json?.booking?.status || json?.booking?.booking?.status || null,
+      start_at: json?.booking?.start_at || json?.booking?.booking?.start_at || null,
+    },
+  });
 
   return NextResponse.json({ ok: true, booking: json, debug_id: debugId });
 }
