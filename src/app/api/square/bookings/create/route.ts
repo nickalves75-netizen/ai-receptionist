@@ -38,7 +38,6 @@ type Body = {
 function normalizeSegments(input: any): Segment[] | null {
   if (!input) return null;
 
-  // If Vapi sends a JSON string
   if (typeof input === "string") {
     try {
       const parsed = JSON.parse(input);
@@ -48,15 +47,11 @@ function normalizeSegments(input: any): Segment[] | null {
     }
   }
 
-  // If Vapi sends a single object
   if (!Array.isArray(input) && typeof input === "object") {
     return [input as Segment];
   }
 
-  // If Vapi sends an array
-  if (Array.isArray(input)) {
-    return input as Segment[];
-  }
+  if (Array.isArray(input)) return input as Segment[];
 
   return null;
 }
@@ -65,11 +60,9 @@ function cleanEmail(raw?: string) {
   const s = (raw ?? "").trim();
   if (!s) return undefined;
 
-  // reject common junk values VAPI/callers might produce
   const junk = ["n/a", "na", "none", "null", "undefined", "no", "noemail", "no email"];
   if (junk.includes(s.toLowerCase())) return undefined;
 
-  // very simple email check (good enough to prevent Square "invalid")
   const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
   return ok ? s : undefined;
 }
@@ -81,7 +74,6 @@ function cleanPhone(raw?: string) {
   const junk = ["n/a", "na", "none", "null", "undefined", "no", "nophone", "no phone"];
   if (junk.includes(s.toLowerCase())) return undefined;
 
-  // keep as-is; Square accepts many formats but E.164 is best
   return s;
 }
 
@@ -94,8 +86,14 @@ async function findOrCreateSquareCustomer(params: {
   const email = cleanEmail(customer.email);
   const phone = cleanPhone(customer.phone);
 
-  // Try search first if we have an identifier
+  // ✅ Search using ONLY ONE identifier (email preferred; else phone)
   if (email || phone) {
+    const searchFilter = email
+      ? { email_address: { exact: email } }
+      : phone
+      ? { phone_number: { exact: phone } }
+      : {};
+
     const searchResp = await fetch("https://connect.squareup.com/v2/customers/search", {
       method: "POST",
       headers: {
@@ -104,12 +102,7 @@ async function findOrCreateSquareCustomer(params: {
         "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
       },
       body: JSON.stringify({
-        query: {
-          filter: {
-            ...(email ? { email_address: { exact: email } } : {}),
-            ...(phone ? { phone_number: { exact: phone } } : {}),
-          },
-        },
+        query: { filter: searchFilter },
         limit: 1,
       }),
     });
@@ -182,7 +175,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "Missing location_id" }, { status: 400 });
   }
 
-  // Create/find Square customer (so booking is valid)
   const customerId = await findOrCreateSquareCustomer({
     accessToken: client.square_access_token,
     customer: body.customer,
