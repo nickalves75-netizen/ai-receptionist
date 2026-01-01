@@ -11,138 +11,129 @@ function getEnv(name: string) {
 type Body = {
   client_id: string;
 
-  start_at: string;
-  end_at: string;
+  // Caller can pass these, but we will apply sane defaults if they are missing/too wide.
+  start_at?: string;
+  end_at?: string;
 
+  /**
+   * Option A (preferred): pass package_key + vehicle_tier and optional addon_keys.
+   */
   package_key?: string;
   vehicle_tier?: "coupe_sedan" | "suv_truck";
   addon_keys?: string[];
 
+  /**
+   * Option B (fallback): directly pass variation ids.
+   */
   service_variation_ids?: string[];
 
+  // optional
   team_member_id?: string;
+
+  /**
+   * Optional guardrail: cap how far ahead we search (default 14 then expand).
+   * If provided, we still expand in steps up to this cap.
+   */
+  max_days_ahead?: number;
 };
 
-function asArray(v: any): any[] {
-  return Array.isArray(v) ? v : [];
+type SquareAvailability = {
+  start_at: string;
+  location_id: string;
+  appointment_segments: any[];
+};
+
+function asArray<T = any>(v: any): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
 }
 
-function parseIsoStrict(s: string): Date | null {
-  if (!s || typeof s !== "string") return null;
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return null;
-  return d;
+function clampInt(n: any, min: number, max: number) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(x)));
 }
 
-/**
- * Clamp only if the provided startAt is valid AND actually in the past.
- * If parsing fails, we should NOT "guess" — return 400 so the caller fixes inputs.
- */
-function clampStartAtToFutureStrict(startAtIso: string, minutesAhead = 5) {
-  const d = parseIsoStrict(startAtIso);
-  if (!d) return { ok: false as const, error: "Invalid start_at datetime (must be ISO/RFC3339)" };
-
-  const min = Date.now() + minutesAhead * 60 * 1000;
-  if (d.getTime() < min) return { ok: true as const, value: new Date(min).toISOString() };
-
-  return { ok: true as const, value: d.toISOString() };
+function nowPlusMinutesIso(minutes: number) {
+  return new Date(Date.now() + minutes * 60 * 1000).toISOString();
 }
 
-/**
- * Preserve window length while ensuring end > start by at least minMinutes.
- * Requires valid original & newStart; if end invalid, we still make safe end.
- */
-function shiftEndToPreserveWindowStrict(params: {
-  originalStartIso: string;
-  originalEndIso: string;
-  newStartIso: string;
-  minMinutes?: number;
+function addDaysIso(startIso: string, days: number) {
+  const d = new Date(startIso);
+  if (Number.isNaN(d.getTime())) return new Date(Date.now() + days * 86400_000).toISOString();
+  return new Date(d.getTime() + days * 86400_000).toISOString();
+}
+
+function fmtLocal(iso: string, tz: string) {
+  const d = new Date(iso);
+  const dateLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(d);
+  const timeLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(d);
+  return { iso, dateLabel, timeLabel, label: `${dateLabel} at ${timeLabel}` };
+}
+
+async function squareAvailabilitySearch(params: {
+  accessToken: string;
+  locationId: string;
+  startAt: string;
+  endAt: string;
+  segmentFilters: { service_variation_id: string }[];
+  teamMemberId?: string;
 }) {
-  const { originalStartIso, originalEndIso, newStartIso, minMinutes = 15 } = params;
+  const { accessToken, locationId, startAt, endAt, segmentFilters, teamMemberId } = params;
 
-  const s0 = parseIsoStrict(originalStartIso);
-  const e0 = parseIsoStrict(originalEndIso);
-  const s1 = parseIsoStrict(newStartIso);
+  const payload: any = {
+    query: {
+      filter: {
+        location_id: locationId,
+        start_at_range: { start_at: startAt, end_at: endAt },
+        segment_filters: segmentFilters,
+      },
+    },
+  };
 
-  if (!s1) return { ok: false as const, error: "Invalid start_at after clamp" };
-
-  const minMs = minMinutes * 60 * 1000;
-
-  // If original window invalid, create a safe small window
-  if (!s0 || !e0) {
-    return { ok: true as const, value: new Date(s1.getTime() + minMs).toISOString() };
+  if (teamMemberId) {
+    payload.query.filter.bookable_time_filters = [{ team_member_id: teamMemberId }];
   }
 
-  let windowMs = e0.getTime() - s0.getTime();
-  if (!Number.isFinite(windowMs) || windowMs < minMs) windowMs = minMs;
+  const res = await fetch("https://connect.squareup.com/v2/bookings/availability/search", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+    },
+    body: JSON.stringify(payload),
+  });
 
-  return { ok: true as const, value: new Date(s1.getTime() + windowMs).toISOString() };
+  const json = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, json };
 }
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as Body | null;
 
-  if (!body?.client_id || !body?.start_at || !body?.end_at) {
-    return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
+  if (!body?.client_id) {
+    return NextResponse.json({ ok: false, error: "Missing client_id" }, { status: 400 });
   }
 
-  // Validate incoming range first (no silent "fixing" invalid strings)
-  const startParsed = parseIsoStrict(String(body.start_at));
-  const endParsed = parseIsoStrict(String(body.end_at));
-  if (!startParsed) {
-    return NextResponse.json({ ok: false, error: "Invalid start_at (must be ISO/RFC3339)" }, { status: 400 });
-  }
-  if (!endParsed) {
-    return NextResponse.json({ ok: false, error: "Invalid end_at (must be ISO/RFC3339)" }, { status: 400 });
-  }
-  if (endParsed.getTime() <= startParsed.getTime()) {
-    return NextResponse.json({ ok: false, error: "end_at must be after start_at" }, { status: 400 });
-  }
-
-  const originalStart = String(body.start_at);
-  const originalEnd = String(body.end_at);
-
-  const clamped = clampStartAtToFutureStrict(originalStart, 5);
-  if (!clamped.ok) {
-    return NextResponse.json({ ok: false, error: clamped.error }, { status: 400 });
-  }
-
-  const shifted = shiftEndToPreserveWindowStrict({
-    originalStartIso: originalStart,
-    originalEndIso: originalEnd,
-    newStartIso: clamped.value,
-    minMinutes: 15,
-  });
-
-  if (!shifted.ok) {
-    return NextResponse.json({ ok: false, error: shifted.error }, { status: 400 });
-  }
-
-  body.start_at = clamped.value;
-  body.end_at = shifted.value;
-
-  if (process.env.KALLR_DEBUG_SQUARE === "1") {
-    console.info("[square][availability_request]", {
-      client_id: body.client_id,
-      originalStart,
-      originalEnd,
-      computedStart: body.start_at,
-      computedEnd: body.end_at,
-      team_member_id: body.team_member_id || null,
-      service_variation_ids: body.service_variation_ids || null,
-      package_key: body.package_key || null,
-      vehicle_tier: body.vehicle_tier || null,
-      addon_keys: body.addon_keys || null,
-    });
-  }
-
+  // Connect to Supabase
   const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false },
   });
 
+  // Load client Square creds (+ timezone)
   const { data: client, error: clientErr } = await supabase
     .from("clients")
-    .select("square_access_token,square_location_id")
+    .select("square_access_token,square_location_id,timezone")
     .eq("id", body.client_id)
     .single();
 
@@ -153,7 +144,9 @@ export async function POST(req: Request) {
     );
   }
 
-  // Determine variation ids
+  const tz = (client as any)?.timezone || "America/New_York";
+
+  // Resolve service variation ids
   let variationIds: string[] = [];
 
   if (Array.isArray(body.service_variation_ids) && body.service_variation_ids.length > 0) {
@@ -193,8 +186,7 @@ export async function POST(req: Request) {
 
     variationIds.push(baseVarId);
 
-    const addonKeys = asArray(body.addon_keys);
-    for (const k of addonKeys) {
+    for (const k of asArray<string>(body.addon_keys)) {
       const addonId = map?.addons?.[k]?.service_variation_id;
       if (addonId) variationIds.push(addonId);
     }
@@ -204,34 +196,98 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "No service variation ids resolved" }, { status: 400 });
   }
 
-  const payload: any = {
-    query: {
-      filter: {
-        location_id: client.square_location_id,
-        start_at_range: { start_at: body.start_at, end_at: body.end_at },
-        segment_filters: variationIds.map((id) => ({ service_variation_id: id })),
+  const segmentFilters = variationIds.map((id) => ({ service_variation_id: id }));
+
+  // ---- Smart date windows ----
+  // Default: start now+5m. Then search 14 days, expand to 30, then 90.
+  // If caller provides start/end, we still protect against absurd ranges.
+  const startBase = body.start_at ? new Date(body.start_at) : new Date();
+  const startAt = Number.isNaN(startBase.getTime()) ? new Date() : startBase;
+
+  // Always ensure start is in the future a bit
+  const safeStartIso = new Date(Math.max(startAt.getTime(), Date.now() + 5 * 60 * 1000)).toISOString();
+
+  // Cap expansion based on optional max_days_ahead
+  const maxDaysCap = clampInt(body.max_days_ahead ?? 90, 7, 365);
+
+  // If caller provided end_at, compute a requested window but cap it
+  let requestedDays = 0;
+  if (body.end_at) {
+    const endD = new Date(body.end_at);
+    if (!Number.isNaN(endD.getTime())) {
+      const ms = endD.getTime() - new Date(safeStartIso).getTime();
+      requestedDays = Math.ceil(ms / 86400_000);
+    }
+  }
+
+  // Build window steps
+  const steps = [14, 30, 90]
+    .map((d) => Math.min(d, maxDaysCap))
+    .filter((v, i, arr) => v > 0 && arr.indexOf(v) === i);
+
+  // If caller requested a smaller window, try that first (but not > cap)
+  if (requestedDays > 0) {
+    const rd = Math.min(Math.max(requestedDays, 1), maxDaysCap);
+    steps.unshift(rd);
+  }
+
+  let lastErr: any = null;
+  let found: SquareAvailability[] = [];
+
+  for (const days of steps) {
+    const endIso = addDaysIso(safeStartIso, days);
+
+    const attempt = await squareAvailabilitySearch({
+      accessToken: client.square_access_token,
+      locationId: client.square_location_id,
+      startAt: safeStartIso,
+      endAt: endIso,
+      segmentFilters,
+      teamMemberId: body.team_member_id,
+    });
+
+    if (!attempt.ok) {
+      lastErr = attempt.json;
+      continue;
+    }
+
+    const slots: SquareAvailability[] = Array.isArray(attempt.json?.availabilities)
+      ? attempt.json.availabilities
+      : [];
+
+    if (slots.length > 0) {
+      found = slots;
+      break;
+    }
+  }
+
+  if (found.length === 0) {
+    return NextResponse.json(
+      {
+        ok: true,
+        availability: { availabilities: [], errors: [] },
+        message: "No availability in searched window",
+        details: lastErr || null,
       },
-    },
-  };
-
-  if (body.team_member_id) {
-    payload.query.filter.bookable_time_filters = [{ team_member_id: body.team_member_id }];
+      { status: 200 }
+    );
   }
 
-  const res = await fetch("https://connect.squareup.com/v2/bookings/availability/search", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${client.square_access_token}`,
-      "Content-Type": "application/json",
-      "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+  // Return slots + a voice-friendly list (first 10)
+  const voiceSlots = found.slice(0, 10).map((s) => ({
+    start_at: s.start_at,
+    start_at_local: fmtLocal(s.start_at, tz),
+    location_id: s.location_id,
+    appointment_segments: s.appointment_segments,
+  }));
+
+  return NextResponse.json(
+    {
+      ok: true,
+      timezone: tz,
+      availability: { availabilities: found, errors: [] },
+      slots: voiceSlots,
     },
-    body: JSON.stringify(payload),
-  });
-
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    return NextResponse.json({ ok: false, error: "Square availability failed", details: json }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true, availability: json });
+    { status: 200 }
+  );
 }
