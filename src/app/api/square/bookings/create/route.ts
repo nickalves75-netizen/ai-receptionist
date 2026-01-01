@@ -2,10 +2,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export const runtime = "nodejs";
-
-function getSupabaseUrl() {
-  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+function getEnv(name: string) {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing env var: ${name}`);
+  return v;
 }
 
 type CustomerBody = {
@@ -61,11 +61,38 @@ function normalizeSegments(input: any): Segment[] | null {
   return null;
 }
 
-async function findOrCreateSquareCustomer(params: { accessToken: string; customer: CustomerBody }) {
+function cleanEmail(raw?: string) {
+  const s = (raw ?? "").trim();
+  if (!s) return undefined;
+
+  // reject common junk values VAPI/callers might produce
+  const junk = ["n/a", "na", "none", "null", "undefined", "no", "noemail", "no email"];
+  if (junk.includes(s.toLowerCase())) return undefined;
+
+  // very simple email check (good enough to prevent Square "invalid")
+  const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+  return ok ? s : undefined;
+}
+
+function cleanPhone(raw?: string) {
+  const s = (raw ?? "").trim();
+  if (!s) return undefined;
+
+  const junk = ["n/a", "na", "none", "null", "undefined", "no", "nophone", "no phone"];
+  if (junk.includes(s.toLowerCase())) return undefined;
+
+  // keep as-is; Square accepts many formats but E.164 is best
+  return s;
+}
+
+async function findOrCreateSquareCustomer(params: {
+  accessToken: string;
+  customer: CustomerBody;
+}) {
   const { accessToken, customer } = params;
 
-  const email = (customer.email || "").trim();
-  const phone = (customer.phone || "").trim();
+  const email = cleanEmail(customer.email);
+  const phone = cleanPhone(customer.phone);
 
   // Try search first if we have an identifier
   if (email || phone) {
@@ -88,11 +115,11 @@ async function findOrCreateSquareCustomer(params: { accessToken: string; custome
     });
 
     const searchJson = await searchResp.json().catch(() => null);
-    const found = (searchJson as any)?.customers?.[0]?.id;
-    if (found) return found as string;
+    const found = searchJson?.customers?.[0]?.id;
+    if (found) return found;
   }
 
-  // Create customer
+  // Create customer (ONLY include valid fields)
   const createResp = await fetch("https://connect.squareup.com/v2/customers", {
     method: "POST",
     headers: {
@@ -101,124 +128,105 @@ async function findOrCreateSquareCustomer(params: { accessToken: string; custome
       "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
     },
     body: JSON.stringify({
-      given_name: customer.first_name || "",
-      family_name: customer.last_name || "",
-      email_address: email || undefined,
-      phone_number: phone || undefined,
+      given_name: (customer.first_name || "").trim(),
+      family_name: (customer.last_name || "").trim() || undefined,
+      email_address: email,
+      phone_number: phone,
     }),
   });
 
   const createJson = await createResp.json().catch(() => null);
-  const id = (createJson as any)?.customer?.id;
+  const id = createJson?.customer?.id;
   if (!createResp.ok || !id) return null;
 
   return id as string;
 }
 
 export async function POST(req: Request) {
-  try {
-    const body = (await req.json().catch(() => null)) as Body | null;
+  const body = (await req.json().catch(() => null)) as Body | null;
 
-    if (!body?.client_id || !body?.start_at || !body?.customer?.first_name) {
-      return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
-    }
+  if (!body?.client_id || !body?.start_at || !body?.customer?.first_name) {
+    return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
+  }
 
-    const segments =
-      normalizeSegments(body.appointment_segments) || normalizeSegments(body.availability_segments);
+  const segments =
+    normalizeSegments(body.appointment_segments) ||
+    normalizeSegments(body.availability_segments);
 
-    if (!segments || segments.length === 0) {
-      return NextResponse.json(
-        { ok: false, error: "Must provide appointment_segments or availability_segments" },
-        { status: 400 }
-      );
-    }
-
-    const supabaseUrl = getSupabaseUrl();
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-    if (!supabaseUrl || !supabaseKey) {
-      return NextResponse.json(
-        { ok: false, error: "Server missing Supabase config" },
-        { status: 500 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false },
-    });
-
-    const { data: client, error: clientErr } = await supabase
-      .from("clients")
-      .select("square_access_token,square_location_id")
-      .eq("id", body.client_id)
-      .single();
-
-    if (clientErr || !client?.square_access_token) {
-      return NextResponse.json(
-        { ok: false, error: "Client missing Square connection", details: clientErr },
-        { status: 400 }
-      );
-    }
-
-    const locationId = (body.location_id || client.square_location_id || "").trim();
-    if (!locationId) {
-      return NextResponse.json({ ok: false, error: "Missing location_id" }, { status: 400 });
-    }
-
-    // Create/find Square customer (so booking is valid)
-    const customerId = await findOrCreateSquareCustomer({
-      accessToken: client.square_access_token,
-      customer: body.customer,
-    });
-
-    if (!customerId) {
-      return NextResponse.json(
-        { ok: false, error: "Failed to create/find Square customer" },
-        { status: 500 }
-      );
-    }
-
-    const idempotencyKey =
-      (globalThis as any)?.crypto?.randomUUID?.() || `kallr_${Date.now()}_${Math.random()}`;
-
-    const payload: any = {
-      idempotency_key: idempotencyKey,
-      booking: {
-        start_at: body.start_at,
-        location_id: locationId,
-        customer_id: customerId,
-        appointment_segments: segments,
-        customer_note: (body.notes || "").trim() || undefined,
-      },
-    };
-
-    const res = await fetch("https://connect.squareup.com/v2/bookings", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${client.square_access_token}`,
-        "Content-Type": "application/json",
-        "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      return NextResponse.json(
-        { ok: false, error: "Square booking create failed", details: json },
-        { status: 500 }
-      );
-    }
-
+  if (!segments || segments.length === 0) {
     return NextResponse.json(
-      { ok: true, booking: json },
-      { status: 200, headers: { "Cache-Control": "no-store" } }
+      { ok: false, error: "Must provide appointment_segments or availability_segments" },
+      { status: 400 }
     );
-  } catch (e: any) {
-    console.error("squareBookingCreate crashed:", e);
+  }
+
+  const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false },
+  });
+
+  const { data: client, error: clientErr } = await supabase
+    .from("clients")
+    .select("square_access_token,square_location_id")
+    .eq("id", body.client_id)
+    .single();
+
+  if (clientErr || !client?.square_access_token) {
     return NextResponse.json(
-      { ok: false, error: "Server error", details: String(e?.message || e) },
+      { ok: false, error: "Client missing Square connection", details: clientErr },
+      { status: 400 }
+    );
+  }
+
+  const locationId = (body.location_id || client.square_location_id || "").trim();
+  if (!locationId) {
+    return NextResponse.json({ ok: false, error: "Missing location_id" }, { status: 400 });
+  }
+
+  // Create/find Square customer (so booking is valid)
+  const customerId = await findOrCreateSquareCustomer({
+    accessToken: client.square_access_token,
+    customer: body.customer,
+  });
+
+  if (!customerId) {
+    return NextResponse.json(
+      { ok: false, error: "Failed to create/find Square customer" },
       { status: 500 }
     );
   }
+
+  const idempotencyKey =
+    (globalThis as any)?.crypto?.randomUUID?.() || `kallr_${Date.now()}_${Math.random()}`;
+
+  const payload: any = {
+    idempotency_key: idempotencyKey,
+    booking: {
+      start_at: body.start_at,
+      location_id: locationId,
+      customer_id: customerId,
+      appointment_segments: segments,
+      customer_note: (body.notes || "").trim() || undefined,
+    },
+  };
+
+  const res = await fetch("https://connect.squareup.com/v2/bookings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${client.square_access_token}`,
+      "Content-Type": "application/json",
+      "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const json = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    return NextResponse.json(
+      { ok: false, error: "Square booking create failed", details: json },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json({ ok: true, booking: json });
 }
