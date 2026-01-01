@@ -1,6 +1,7 @@
 // src/app/api/square/availability/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logApiEvent } from "@/lib/apiEventLog";
 
 function getEnv(name: string) {
   const v = process.env[name];
@@ -11,147 +12,172 @@ function getEnv(name: string) {
 type Body = {
   client_id: string;
 
-  // Caller can pass these, but we will apply sane defaults if they are missing/too wide.
-  start_at?: string;
-  end_at?: string;
+  // date range
+  start_at: string;
+  end_at: string;
 
   /**
    * Option A (preferred): pass package_key + vehicle_tier and optional addon_keys.
+   * Kallr uses the per-client service map from DB to look up variation IDs.
    */
-  package_key?: string;
+  package_key?: string; // e.g. "platinum_detail"
   vehicle_tier?: "coupe_sedan" | "suv_truck";
-  addon_keys?: string[];
+  addon_keys?: string[]; // e.g. ["pet_hair","travel_fees"]
 
   /**
-   * Option B (fallback): directly pass variation ids.
+   * Option B (fallback): directly pass variation ids (what we used for testing).
    */
   service_variation_ids?: string[];
 
   // optional
   team_member_id?: string;
-
-  /**
-   * Optional guardrail: cap how far ahead we search (default 14 then expand).
-   * If provided, we still expand in steps up to this cap.
-   */
-  max_days_ahead?: number;
 };
 
-type SquareAvailability = {
-  start_at: string;
-  location_id: string;
-  appointment_segments: any[];
-};
-
-function asArray<T = any>(v: any): T[] {
-  return Array.isArray(v) ? (v as T[]) : [];
+function asArray(v: any): any[] {
+  return Array.isArray(v) ? v : [];
 }
 
-function clampInt(n: any, min: number, max: number) {
-  const x = Number(n);
-  if (!Number.isFinite(x)) return min;
-  return Math.max(min, Math.min(max, Math.trunc(x)));
+/**
+ * If start_at comes in as "past" (timezone/parsing), Square rejects.
+ * Fix: clamp start_at to now + small buffer.
+ */
+function clampStartAtToFuture(startAtIso: string, minutesAhead = 5) {
+  const d = new Date(startAtIso);
+  if (Number.isNaN(d.getTime())) return startAtIso;
+
+  const min = Date.now() + minutesAhead * 60 * 1000;
+  if (d.getTime() < min) return new Date(min).toISOString();
+
+  return d.toISOString();
 }
 
-function nowPlusMinutesIso(minutes: number) {
-  return new Date(Date.now() + minutes * 60 * 1000).toISOString();
-}
-
-function addDaysIso(startIso: string, days: number) {
-  const d = new Date(startIso);
-  if (Number.isNaN(d.getTime())) return new Date(Date.now() + days * 86400_000).toISOString();
-  return new Date(d.getTime() + days * 86400_000).toISOString();
-}
-
-function fmtLocal(iso: string, tz: string) {
-  const d = new Date(iso);
-  const dateLabel = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  }).format(d);
-  const timeLabel = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  }).format(d);
-  return { iso, dateLabel, timeLabel, label: `${dateLabel} at ${timeLabel}` };
-}
-
-async function squareAvailabilitySearch(params: {
-  accessToken: string;
-  locationId: string;
-  startAt: string;
-  endAt: string;
-  segmentFilters: { service_variation_id: string }[];
-  teamMemberId?: string;
+/**
+ * Preserve the caller’s intended window length:
+ * - Compute original window = (endOrig - startOrig)
+ * - If we clamp start forward, shift end forward by the same window length
+ * - Ensure end_at is always after start_at (min 15 minutes)
+ */
+function shiftEndToPreserveWindow(params: {
+  originalStartIso: string;
+  originalEndIso: string;
+  newStartIso: string;
+  minMinutes?: number;
 }) {
-  const { accessToken, locationId, startAt, endAt, segmentFilters, teamMemberId } = params;
+  const { originalStartIso, originalEndIso, newStartIso, minMinutes = 15 } = params;
 
-  const payload: any = {
-    query: {
-      filter: {
-        location_id: locationId,
-        start_at_range: { start_at: startAt, end_at: endAt },
-        segment_filters: segmentFilters,
-      },
-    },
-  };
+  const s0 = new Date(originalStartIso);
+  const e0 = new Date(originalEndIso);
+  const s1 = new Date(newStartIso);
 
-  if (teamMemberId) {
-    payload.query.filter.bookable_time_filters = [{ team_member_id: teamMemberId }];
+  const minMs = minMinutes * 60 * 1000;
+
+  if (Number.isNaN(s1.getTime())) return originalEndIso;
+
+  // If originals are invalid, just make a safe end after newStart
+  if (Number.isNaN(s0.getTime()) || Number.isNaN(e0.getTime())) {
+    return new Date(s1.getTime() + minMs).toISOString();
   }
 
-  const res = await fetch("https://connect.squareup.com/v2/bookings/availability/search", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
-    },
-    body: JSON.stringify(payload),
-  });
+  let windowMs = e0.getTime() - s0.getTime();
 
-  const json = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, json };
+  // If caller gave a bad/zero window, force a small window
+  if (!Number.isFinite(windowMs) || windowMs < minMs) windowMs = minMs;
+
+  const newEnd = new Date(s1.getTime() + windowMs);
+  return newEnd.toISOString();
 }
 
 export async function POST(req: Request) {
+  const debugId =
+    (globalThis as any)?.crypto?.randomUUID?.() ||
+    `av_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
   const body = (await req.json().catch(() => null)) as Body | null;
 
-  if (!body?.client_id) {
-    return NextResponse.json({ ok: false, error: "Missing client_id" }, { status: 400 });
-  }
-
-  // Connect to Supabase
-  const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
+  await logApiEvent({
+    route: "square.availability",
+    client_id: body?.client_id,
+    ok: undefined,
+    debug_id: debugId,
+    request: {
+      start_at: body?.start_at,
+      end_at: body?.end_at,
+      package_key: body?.package_key,
+      vehicle_tier: body?.vehicle_tier,
+      addon_keys: body?.addon_keys,
+      service_variation_ids_count: Array.isArray(body?.service_variation_ids)
+        ? body?.service_variation_ids.length
+        : 0,
+      team_member_id: body?.team_member_id,
+    },
   });
 
-  // Load client Square creds (+ timezone)
-  const { data: client, error: clientErr } = await supabase
-    .from("clients")
-    .select("square_access_token,square_location_id,timezone")
-    .eq("id", body.client_id)
-    .single();
+  if (!body?.client_id || !body?.start_at || !body?.end_at) {
+    await logApiEvent({
+      route: "square.availability",
+      client_id: body?.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 400,
+      response: { error: "Missing required fields" },
+    });
 
-  if (clientErr || !client?.square_access_token || !client?.square_location_id) {
     return NextResponse.json(
-      { ok: false, error: "Client missing Square connection", details: clientErr },
+      { ok: false, error: "Missing required fields", debug_id: debugId },
       { status: 400 }
     );
   }
 
-  const tz = (client as any)?.timezone || "America/New_York";
+  const originalStart = String(body.start_at);
+  const originalEnd = String(body.end_at);
 
-  // Resolve service variation ids
+  // clamp start to future
+  const newStart = clampStartAtToFuture(originalStart);
+
+  // shift end forward to preserve original window length
+  const newEnd = shiftEndToPreserveWindow({
+    originalStartIso: originalStart,
+    originalEndIso: originalEnd,
+    newStartIso: newStart,
+    minMinutes: 15,
+  });
+
+  body.start_at = newStart;
+  body.end_at = newEnd;
+
+  const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false },
+  });
+
+  const { data: client, error: clientErr } = await supabase
+    .from("clients")
+    .select("square_access_token,square_location_id")
+    .eq("id", body.client_id)
+    .single();
+
+  if (clientErr || !client?.square_access_token || !client?.square_location_id) {
+    await logApiEvent({
+      route: "square.availability",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 400,
+      response: { error: "Client missing Square connection", details: clientErr },
+    });
+
+    return NextResponse.json(
+      { ok: false, error: "Client missing Square connection", details: clientErr, debug_id: debugId },
+      { status: 400 }
+    );
+  }
+
+  // Determine service variation ids
   let variationIds: string[] = [];
 
   if (Array.isArray(body.service_variation_ids) && body.service_variation_ids.length > 0) {
     variationIds = body.service_variation_ids;
   } else {
+    // Load client service map from DB
     const { data: mapRow, error: mapErr } = await supabase
       .from("client_service_maps")
       .select("map")
@@ -159,8 +185,17 @@ export async function POST(req: Request) {
       .single();
 
     if (mapErr || !mapRow?.map) {
+      await logApiEvent({
+        route: "square.availability",
+        client_id: body.client_id,
+        ok: false,
+        debug_id: debugId,
+        status_code: 400,
+        response: { error: "Missing client service map", details: mapErr },
+      });
+
       return NextResponse.json(
-        { ok: false, error: "Missing client service map", details: mapErr },
+        { ok: false, error: "Missing client service map", details: mapErr, debug_id: debugId },
         { status: 400 }
       );
     }
@@ -170,124 +205,125 @@ export async function POST(req: Request) {
     const tier = body.vehicle_tier;
 
     if (!pkgKey || !tier) {
+      await logApiEvent({
+        route: "square.availability",
+        client_id: body.client_id,
+        ok: false,
+        debug_id: debugId,
+        status_code: 400,
+        response: { error: "Must provide package_key + vehicle_tier (or service_variation_ids)" },
+      });
+
       return NextResponse.json(
-        { ok: false, error: "Must provide package_key + vehicle_tier (or service_variation_ids)" },
+        {
+          ok: false,
+          error: "Must provide package_key + vehicle_tier (or service_variation_ids)",
+          debug_id: debugId,
+        },
         { status: 400 }
       );
     }
 
     const baseVarId = map?.base_packages?.[pkgKey]?.tiers?.[tier]?.service_variation_id || null;
+
     if (!baseVarId) {
+      await logApiEvent({
+        route: "square.availability",
+        client_id: body.client_id,
+        ok: false,
+        debug_id: debugId,
+        status_code: 400,
+        response: { error: `Unknown package_key/tier: ${pkgKey}/${tier}` },
+      });
+
       return NextResponse.json(
-        { ok: false, error: `Unknown package_key/tier: ${pkgKey}/${tier}` },
+        { ok: false, error: `Unknown package_key/tier: ${pkgKey}/${tier}`, debug_id: debugId },
         { status: 400 }
       );
     }
 
     variationIds.push(baseVarId);
 
-    for (const k of asArray<string>(body.addon_keys)) {
+    const addonKeys = asArray(body.addon_keys);
+    for (const k of addonKeys) {
       const addonId = map?.addons?.[k]?.service_variation_id;
       if (addonId) variationIds.push(addonId);
     }
   }
 
   if (variationIds.length === 0) {
-    return NextResponse.json({ ok: false, error: "No service variation ids resolved" }, { status: 400 });
+    await logApiEvent({
+      route: "square.availability",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 400,
+      response: { error: "No service variation ids resolved" },
+    });
+
+    return NextResponse.json(
+      { ok: false, error: "No service variation ids resolved", debug_id: debugId },
+      { status: 400 }
+    );
   }
 
   const segmentFilters = variationIds.map((id) => ({ service_variation_id: id }));
 
-  // ---- Smart date windows ----
-  // Default: start now+5m. Then search 14 days, expand to 30, then 90.
-  // If caller provides start/end, we still protect against absurd ranges.
-  const startBase = body.start_at ? new Date(body.start_at) : new Date();
-  const startAt = Number.isNaN(startBase.getTime()) ? new Date() : startBase;
+  const payload: any = {
+    query: {
+      filter: {
+        location_id: client.square_location_id,
+        start_at_range: { start_at: body.start_at, end_at: body.end_at },
+        segment_filters: segmentFilters,
+      },
+    },
+  };
 
-  // Always ensure start is in the future a bit
-  const safeStartIso = new Date(Math.max(startAt.getTime(), Date.now() + 5 * 60 * 1000)).toISOString();
-
-  // Cap expansion based on optional max_days_ahead
-  const maxDaysCap = clampInt(body.max_days_ahead ?? 90, 7, 365);
-
-  // If caller provided end_at, compute a requested window but cap it
-  let requestedDays = 0;
-  if (body.end_at) {
-    const endD = new Date(body.end_at);
-    if (!Number.isNaN(endD.getTime())) {
-      const ms = endD.getTime() - new Date(safeStartIso).getTime();
-      requestedDays = Math.ceil(ms / 86400_000);
-    }
+  if (body.team_member_id) {
+    payload.query.filter.bookable_time_filters = [{ team_member_id: body.team_member_id }];
   }
 
-  // Build window steps
-  const steps = [14, 30, 90]
-    .map((d) => Math.min(d, maxDaysCap))
-    .filter((v, i, arr) => v > 0 && arr.indexOf(v) === i);
+  const res = await fetch("https://connect.squareup.com/v2/bookings/availability/search", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${client.square_access_token}`,
+      "Content-Type": "application/json",
+      "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+    },
+    body: JSON.stringify(payload),
+  });
 
-  // If caller requested a smaller window, try that first (but not > cap)
-  if (requestedDays > 0) {
-    const rd = Math.min(Math.max(requestedDays, 1), maxDaysCap);
-    steps.unshift(rd);
-  }
+  const json = await res.json().catch(() => ({}));
 
-  let lastErr: any = null;
-  let found: SquareAvailability[] = [];
-
-  for (const days of steps) {
-    const endIso = addDaysIso(safeStartIso, days);
-
-    const attempt = await squareAvailabilitySearch({
-      accessToken: client.square_access_token,
-      locationId: client.square_location_id,
-      startAt: safeStartIso,
-      endAt: endIso,
-      segmentFilters,
-      teamMemberId: body.team_member_id,
+  if (!res.ok) {
+    await logApiEvent({
+      route: "square.availability",
+      client_id: body.client_id,
+      ok: false,
+      debug_id: debugId,
+      status_code: 500,
+      response: json,
     });
 
-    if (!attempt.ok) {
-      lastErr = attempt.json;
-      continue;
-    }
-
-    const slots: SquareAvailability[] = Array.isArray(attempt.json?.availabilities)
-      ? attempt.json.availabilities
-      : [];
-
-    if (slots.length > 0) {
-      found = slots;
-      break;
-    }
-  }
-
-  if (found.length === 0) {
     return NextResponse.json(
-      {
-        ok: true,
-        availability: { availabilities: [], errors: [] },
-        message: "No availability in searched window",
-        details: lastErr || null,
-      },
-      { status: 200 }
+      { ok: false, error: "Square availability failed", details: json, debug_id: debugId },
+      { status: 500 }
     );
   }
 
-  // Return slots + a voice-friendly list (first 10)
-  const voiceSlots = found.slice(0, 10).map((s) => ({
-    start_at: s.start_at,
-    start_at_local: fmtLocal(s.start_at, tz),
-    location_id: s.location_id,
-    appointment_segments: s.appointment_segments,
-  }));
-
-  return NextResponse.json(
-    {
-      ok: true,
-      timezone: tz,
-      availability: { availabilities: found, errors: [] },
-      slots: voiceSlots,
+  await logApiEvent({
+    route: "square.availability",
+    client_id: body.client_id,
+    ok: true,
+    debug_id: debugId,
+    status_code: 200,
+    response: {
+      start_at: body.start_at,
+      end_at: body.end_at,
+      availabilities_count: Array.isArray(json?.availabilities) ? json.availabilities.length : 0,
+      errors_count: Array.isArray(json?.errors) ? json.errors.length : 0,
     },
-    { status: 200 }
-  );
+  });
+
+  return NextResponse.json({ ok: true, availability: json, debug_id: debugId });
 }
