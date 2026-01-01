@@ -79,6 +79,19 @@ async function squareJson(url: string, opts: RequestInit) {
   const json = await res.json().catch(() => ({}));
   return { res, json };
 }
+function isValidEmail(email: string) {
+  // simple + safe email check (prevents Square "email is invalid")
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function normalizePhone(phone: string) {
+  const p = (phone || "").trim();
+  // Only accept E.164 +##########
+  if (!p) return "";
+  if (!p.startsWith("+")) return "";
+  if (!/^\+\d{7,15}$/.test(p)) return "";
+  return p;
+}
 
 async function findOrCreateSquareCustomer(params: {
   accessToken: string;
@@ -87,38 +100,38 @@ async function findOrCreateSquareCustomer(params: {
 }) {
   const { accessToken, customer, debugId } = params;
 
-  const email = cleanEmail(customer.email);
-  const phone = cleanPhone(customer.phone);
+  const rawEmail = (customer.email || "").trim().toLowerCase();
+const email = rawEmail && isValidEmail(rawEmail) ? rawEmail : "";
+const phone = normalizePhone(customer.phone || "");
 
-  // Try search by ONE identifier (email preferred)
-  if (email || phone) {
-    const filter = email
-      ? { email_address: { exact: email } }
-      : { phone_number: { exact: phone } };
 
-    const { res: searchRes, json: searchJson } = await squareJson(
-      "https://connect.squareup.com/v2/customers/search",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-          "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+  // ✅ Safer matching policy:
+// Only re-use an existing Square customer if BOTH email + phone match.
+// This prevents mis-linking a booking to the wrong person based on email-only.
+if (email && phone) {
+  const searchResp = await fetch("https://connect.squareup.com/v2/customers/search", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+    },
+    body: JSON.stringify({
+      query: {
+        filter: {
+          email_address: { exact: email },
+          phone_number: { exact: phone },
         },
-        body: JSON.stringify({ query: { filter }, limit: 1 }),
-      }
-    );
+      },
+      limit: 1,
+    }),
+  });
 
-    if (searchRes.ok) {
-      const found = searchJson?.customers?.[0]?.id;
-      if (found) return found as string;
-    } else {
-      console.error("[square][customer_search_failed]", debugId, {
-        status: searchRes.status,
-        details: searchJson,
-      });
-    }
-  }
+  const searchJson = await searchResp.json().catch(() => null);
+  const found = searchJson?.customers?.[0]?.id;
+  if (found) return found;
+}
+
 
   // Create (email optional; phone optional)
   const payload: any = {
