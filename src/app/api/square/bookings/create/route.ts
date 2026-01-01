@@ -47,46 +47,66 @@ function normalizeSegments(input: any): Segment[] | null {
     }
   }
 
-  if (!Array.isArray(input) && typeof input === "object") {
-    return [input as Segment];
-  }
-
+  if (!Array.isArray(input) && typeof input === "object") return [input as Segment];
   if (Array.isArray(input)) return input as Segment[];
 
   return null;
 }
 
+// ✅ Stricter email cleaning to avoid Square INVALID_REQUEST_ERROR
 function cleanEmail(raw?: string) {
   const s = (raw ?? "").trim();
   if (!s) return undefined;
 
+  const lower = s.toLowerCase();
   const junk = ["n/a", "na", "none", "null", "undefined", "no", "noemail", "no email"];
-  if (junk.includes(s.toLowerCase())) return undefined;
+  if (junk.includes(lower)) return undefined;
 
+  // basic format
   const ok = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-  return ok ? s : undefined;
+  if (!ok) return undefined;
+
+  // avoid common test domains that some providers reject
+  const domain = lower.split("@")[1] || "";
+  if (["example.com", "example.net", "example.org"].includes(domain)) return undefined;
+
+  return s;
 }
 
 function cleanPhone(raw?: string) {
   const s = (raw ?? "").trim();
   if (!s) return undefined;
 
+  const lower = s.toLowerCase();
   const junk = ["n/a", "na", "none", "null", "undefined", "no", "nophone", "no phone"];
-  if (junk.includes(s.toLowerCase())) return undefined;
+  if (junk.includes(lower)) return undefined;
 
   return s;
+}
+
+function isEmailInvalidSquareError(details: any): boolean {
+  const errs = details?.errors;
+  if (!Array.isArray(errs)) return false;
+  return errs.some((e: any) => (e?.field || "").toLowerCase() === "email");
+}
+
+async function squareJson(url: string, opts: RequestInit) {
+  const res = await fetch(url, opts);
+  const json = await res.json().catch(() => ({}));
+  return { res, json };
 }
 
 async function findOrCreateSquareCustomer(params: {
   accessToken: string;
   customer: CustomerBody;
+  debugId?: string;
 }) {
-  const { accessToken, customer } = params;
+  const { accessToken, customer, debugId } = params;
 
   const email = cleanEmail(customer.email);
   const phone = cleanPhone(customer.phone);
 
-  // ✅ Search using ONLY ONE identifier (email preferred; else phone)
+  // Search using ONE identifier only (email preferred)
   if (email || phone) {
     const searchFilter = email
       ? { email_address: { exact: email } }
@@ -94,45 +114,97 @@ async function findOrCreateSquareCustomer(params: {
       ? { phone_number: { exact: phone } }
       : {};
 
-    const searchResp = await fetch("https://connect.squareup.com/v2/customers/search", {
+    const { res: searchRes, json: searchJson } = await squareJson(
+      "https://connect.squareup.com/v2/customers/search",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+        },
+        body: JSON.stringify({ query: { filter: searchFilter }, limit: 1 }),
+      }
+    );
+
+    if (searchRes.ok) {
+      const found = searchJson?.customers?.[0]?.id;
+      if (found) return found as string;
+    } else {
+      // Safe debug
+      if (process.env.KALLR_DEBUG_SQUARE === "1") {
+        console.error("[square][customer_search_failed]", debugId, {
+          status: searchRes.status,
+          details: searchJson,
+        });
+      }
+      // continue to create
+    }
+  }
+
+  // Create customer
+  const createBodyBase: any = {
+    given_name: (customer.first_name || "").trim(),
+    family_name: (customer.last_name || "").trim() || undefined,
+    phone_number: phone,
+  };
+
+  // 1) Try with email (only if valid)
+  if (email) createBodyBase.email_address = email;
+
+  const { res: createRes1, json: createJson1 } = await squareJson(
+    "https://connect.squareup.com/v2/customers",
+    {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
         "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
       },
-      body: JSON.stringify({
-        query: { filter: searchFilter },
-        limit: 1,
-      }),
-    });
+      body: JSON.stringify(createBodyBase),
+    }
+  );
 
-    const searchJson = await searchResp.json().catch(() => null);
-    const found = searchJson?.customers?.[0]?.id;
-    if (found) return found;
+  if (createRes1.ok && createJson1?.customer?.id) return createJson1.customer.id as string;
+
+  // 2) If Square says email invalid, retry WITHOUT email (this fixes real calls)
+  if (email && isEmailInvalidSquareError(createJson1)) {
+    const retryBody = { ...createBodyBase };
+    delete retryBody.email_address;
+
+    const { res: createRes2, json: createJson2 } = await squareJson(
+      "https://connect.squareup.com/v2/customers",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+        },
+        body: JSON.stringify(retryBody),
+      }
+    );
+
+    if (process.env.KALLR_DEBUG_SQUARE === "1") {
+      console.error("[square][customer_create_email_invalid_retry]", debugId, {
+        firstAttempt: createJson1,
+        secondStatus: createRes2.status,
+        secondAttempt: createJson2,
+      });
+    }
+
+    if (createRes2.ok && createJson2?.customer?.id) return createJson2.customer.id as string;
   }
 
-  // Create customer (ONLY include valid fields)
-  const createResp = await fetch("https://connect.squareup.com/v2/customers", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
-    },
-    body: JSON.stringify({
-      given_name: (customer.first_name || "").trim(),
-      family_name: (customer.last_name || "").trim() || undefined,
-      email_address: email,
-      phone_number: phone,
-    }),
-  });
+  if (process.env.KALLR_DEBUG_SQUARE === "1") {
+    console.error("[square][customer_create_failed]", debugId, {
+      status: createRes1.status,
+      details: createJson1,
+      sentEmail: email ? true : false,
+    });
+  }
 
-  const createJson = await createResp.json().catch(() => null);
-  const id = createJson?.customer?.id;
-  if (!createResp.ok || !id) return null;
-
-  return id as string;
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -151,6 +223,26 @@ export async function POST(req: Request) {
       { ok: false, error: "Must provide appointment_segments or availability_segments" },
       { status: 400 }
     );
+  }
+
+  // safe debug id for correlating logs
+  const debugId = `lux_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+  // Safe request logging (NO tokens)
+  if (process.env.KALLR_DEBUG_SQUARE === "1") {
+    console.info("[square][booking_request]", debugId, {
+      client_id: body.client_id,
+      start_at: body.start_at,
+      location_id: body.location_id,
+      customer: {
+        first_name: body.customer?.first_name,
+        last_name: body.customer?.last_name,
+        phone: body.customer?.phone,
+        email: body.customer?.email,
+      },
+      notes_len: (body.notes || "").length,
+      segments_count: segments.length,
+    });
   }
 
   const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
@@ -178,6 +270,7 @@ export async function POST(req: Request) {
   const customerId = await findOrCreateSquareCustomer({
     accessToken: client.square_access_token,
     customer: body.customer,
+    debugId,
   });
 
   if (!customerId) {
@@ -201,7 +294,7 @@ export async function POST(req: Request) {
     },
   };
 
-  const res = await fetch("https://connect.squareup.com/v2/bookings", {
+  const { res, json } = await squareJson("https://connect.squareup.com/v2/bookings", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${client.square_access_token}`,
@@ -211,9 +304,13 @@ export async function POST(req: Request) {
     body: JSON.stringify(payload),
   });
 
-  const json = await res.json().catch(() => ({}));
-
   if (!res.ok) {
+    if (process.env.KALLR_DEBUG_SQUARE === "1") {
+      console.error("[square][booking_create_failed]", debugId, {
+        status: res.status,
+        details: json,
+      });
+    }
     return NextResponse.json(
       { ok: false, error: "Square booking create failed", details: json },
       { status: 500 }
