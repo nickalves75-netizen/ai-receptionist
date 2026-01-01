@@ -2,10 +2,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-function getEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
+export const runtime = "nodejs";
+
+function getSupabaseUrl() {
+  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 }
 
 function asArray(v: any): any[] {
@@ -22,7 +22,7 @@ type Body = {
 
   // when to search
   start_at: string; // ISO / RFC3339
-  end_at: string;   // ISO / RFC3339
+  end_at: string; // ISO / RFC3339
 
   // customer
   customer: {
@@ -33,24 +33,40 @@ type Body = {
   };
 
   // optional preferences
-  preferred_start_at?: string; // if caller requests a specific time; we'll try to match, else choose first
+  preferred_start_at?: string;
   team_member_id?: string;
 
   customer_note?: string;
 
-  // if true, just returns availability options (no booking)
   dry_run?: boolean;
 };
 
+function safeUUID() {
+  return (globalThis as any)?.crypto?.randomUUID?.() || `kallr_${Date.now()}_${Math.random()}`;
+}
+
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as Body;
+    const body = (await req.json().catch(() => null)) as Body | null;
 
-    if (!body?.client_id || !body?.package_key || !body?.vehicle_tier || !body?.start_at || !body?.end_at || !body?.customer?.given_name) {
+    if (
+      !body?.client_id ||
+      !body?.package_key ||
+      !body?.vehicle_tier ||
+      !body?.start_at ||
+      !body?.end_at ||
+      !body?.customer?.given_name
+    ) {
       return NextResponse.json({ ok: false, error: "Missing required fields" }, { status: 400 });
     }
 
-    const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
+    const supabaseUrl = getSupabaseUrl();
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json({ ok: false, error: "Server missing Supabase config" }, { status: 500 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false },
     });
 
@@ -127,12 +143,15 @@ export async function POST(req: Request) {
       body: JSON.stringify(payload),
     });
 
-    const availJson = await availRes.json();
+    const availJson = await availRes.json().catch(() => ({}));
     if (!availRes.ok) {
-      return NextResponse.json({ ok: false, error: "Square availability failed", details: availJson }, { status: 500 });
+      return NextResponse.json(
+        { ok: false, error: "Square availability failed", details: availJson },
+        { status: 500 }
+      );
     }
 
-    const slots: any[] = Array.isArray(availJson?.availabilities) ? availJson.availabilities : [];
+    const slots: any[] = Array.isArray((availJson as any)?.availabilities) ? (availJson as any).availabilities : [];
 
     if (slots.length === 0) {
       return NextResponse.json({
@@ -146,26 +165,34 @@ export async function POST(req: Request) {
     if (body.dry_run) {
       const tz = (client as any)?.timezone || "America/New_York";
 
+      const fmt = (iso: string) => {
+        const d = new Date(iso);
+        const dateLabel = new Intl.DateTimeFormat("en-US", {
+          timeZone: tz,
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        }).format(d);
+        const timeLabel = new Intl.DateTimeFormat("en-US", {
+          timeZone: tz,
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }).format(d);
+        return { iso, dateLabel, timeLabel, label: `${dateLabel} at ${timeLabel}` };
+      };
 
-const fmt = (iso: string) => {
-  const d = new Date(iso);
-  const dateLabel = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" }).format(d);
-  const timeLabel = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true }).format(d);
-  return { iso, dateLabel, timeLabel, label: `${dateLabel} at ${timeLabel}` };
-};
-
-return NextResponse.json({
-  ok: true,
-  dry_run: true,
-  timezone: tz,
-  slots: slots.slice(0, 10).map((s) => ({
-    start_at: s.start_at,
-    start_at_local: fmt(s.start_at),
-    location_id: s.location_id,
-    appointment_segments: s.appointment_segments,
-  })),
-});
-
+      return NextResponse.json({
+        ok: true,
+        dry_run: true,
+        timezone: tz,
+        slots: slots.slice(0, 10).map((s) => ({
+          start_at: s.start_at,
+          start_at_local: fmt(s.start_at),
+          location_id: s.location_id,
+          appointment_segments: s.appointment_segments,
+        })),
+      });
     }
 
     // Choose slot
@@ -191,7 +218,7 @@ return NextResponse.json({
       }),
     });
 
-    const createCustomerJson = await createCustomerRes.json();
+    const createCustomerJson = await createCustomerRes.json().catch(() => ({}));
     if (!createCustomerRes.ok) {
       console.error("Square customer create failed:", createCustomerJson);
       return NextResponse.json(
@@ -200,7 +227,7 @@ return NextResponse.json({
       );
     }
 
-    const customerId = createCustomerJson?.customer?.id as string | undefined;
+    const customerId = (createCustomerJson as any)?.customer?.id as string | undefined;
     if (!customerId) {
       return NextResponse.json(
         { ok: false, error: "Square returned no customer id", details: createCustomerJson },
@@ -210,7 +237,7 @@ return NextResponse.json({
 
     // 3) Create booking using availability-returned segments
     const bookingPayload: any = {
-      idempotency_key: crypto.randomUUID(),
+      idempotency_key: safeUUID(),
       booking: {
         location_id: chosen.location_id || client.square_location_id,
         start_at: chosen.start_at,
@@ -230,7 +257,7 @@ return NextResponse.json({
       body: JSON.stringify(bookingPayload),
     });
 
-    const bookingJson = await bookingRes.json();
+    const bookingJson = await bookingRes.json().catch(() => ({}));
     if (!bookingRes.ok) {
       console.error("Square booking create failed:", bookingJson);
       return NextResponse.json(
