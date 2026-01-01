@@ -94,6 +94,7 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => null)) as Body | null;
 
+  // Initial request log (what Vapi sent)
   await logApiEvent({
     route: "square.availability",
     client_id: body?.client_id,
@@ -105,6 +106,9 @@ export async function POST(req: Request) {
       package_key: body?.package_key,
       vehicle_tier: body?.vehicle_tier,
       addon_keys: body?.addon_keys,
+      service_variation_ids: Array.isArray(body?.service_variation_ids)
+        ? body?.service_variation_ids
+        : undefined,
       service_variation_ids_count: Array.isArray(body?.service_variation_ids)
         ? body?.service_variation_ids.length
         : 0,
@@ -170,6 +174,17 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+
+  // Log which location_id we are actually using
+  await logApiEvent({
+    route: "square.availability",
+    client_id: body.client_id,
+    ok: undefined,
+    debug_id: debugId,
+    request: {
+      location_id: client.square_location_id,
+    },
+  });
 
   // Determine service variation ids
   let variationIds: string[] = [];
@@ -266,6 +281,18 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
+
+  // Log the resolved variation IDs we are sending to Square
+  await logApiEvent({
+    route: "square.availability",
+    client_id: body.client_id,
+    ok: undefined,
+    debug_id: debugId,
+    request: {
+      variation_ids: variationIds.slice(0, 10),
+      variation_ids_count: variationIds.length,
+    },
+  });
 
   const segmentFilters = variationIds.map((id) => ({ service_variation_id: id }));
 
