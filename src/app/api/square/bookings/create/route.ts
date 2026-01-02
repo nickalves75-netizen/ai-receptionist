@@ -9,6 +9,17 @@ import { NextResponse } from "next/server";
 
 const VERSION = "strict_v2";
 
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    version: VERSION,
+    route: "/api/square/bookings/create",
+  });
+}
+
+
 type CreateBookingInput = {
   start_at: string; // RFC3339 exact slot
   location_id: string;
@@ -156,9 +167,7 @@ async function findOrCreateCustomer(input: CreateBookingInput, requestId: string
   return { customer_id: json.customer.id as string, phone };
 }
 
-export async function GET() {
-  return NextResponse.json({ ok: true, version: VERSION });
-}
+
 
 export async function POST(req: Request) {
   const requestId = crypto.randomUUID();
