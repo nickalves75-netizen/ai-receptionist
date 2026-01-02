@@ -1,7 +1,6 @@
 // src/app/api/square/bookings/create/route.ts
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { logApiEvent } from "@/lib/apiEventLog";
 
 function getEnv(name: string) {
   const v = process.env[name];
@@ -26,24 +25,24 @@ type Segment = {
 type Body = {
   client_id: string;
 
-  // caller-selected slot start time (ISO). We re-check availability around this.
+  // MUST be ISO datetime string (e.g. 2026-01-03T15:00:00Z)
   start_at: string;
 
+  // optional; if omitted we will use the client's default Square location_id
   location_id?: string;
 
-  // NEW: simplest + most reliable input from Vapi
-  // (array of variation ids, e.g. base service + add-ons)
-  // Vapi can handle array of strings fine.
+  // NEW (preferred): allow Vapi to send variation IDs directly
+  // Accepts: string[] OR a JSON string '["id1","id2"]' OR a comma-separated string "id1,id2"
   service_variation_ids?: string[] | string;
 
-  // Backward compatible (optional)
+  // Backward compat: old callers might still send segments
   appointment_segments?: Segment[] | Segment | string;
   availability_segments?: Segment[] | Segment | string;
 
   customer: CustomerBody;
   notes?: string;
 
-  // optional: lock to a specific team member
+  // optional: to make booking deterministic
   team_member_id?: string;
 };
 
@@ -59,34 +58,13 @@ function normalizePhone(phone: string) {
   return p;
 }
 
-// Accept: ["id1","id2"], OR JSON string '["id1"]', OR comma-separated "id1,id2"
-function normalizeVariationIds(input: any): string[] | null {
-  if (!input) return null;
+function stripMs(iso: string) {
+  return iso.replace(/\.\d{3}Z$/, "Z");
+}
 
-  if (typeof input === "string") {
-    const s = input.trim();
-    if (!s) return null;
-
-    // try JSON
-    try {
-      const parsed = JSON.parse(s);
-      const fromJson = normalizeVariationIds(parsed);
-      if (fromJson && fromJson.length) return fromJson;
-    } catch {
-      // ignore
-    }
-
-    // comma-separated
-    const parts = s.split(",").map((x) => x.trim()).filter(Boolean);
-    return parts.length ? parts : null;
-  }
-
-  if (Array.isArray(input)) {
-    const cleaned = input.map(String).map((x) => x.trim()).filter(Boolean);
-    return cleaned.length ? cleaned : null;
-  }
-
-  return null;
+function isValidIsoDateString(s: string) {
+  const d = new Date(s);
+  return !Number.isNaN(d.getTime());
 }
 
 function normalizeSegments(input: any): Segment[] | null {
@@ -112,6 +90,45 @@ function normalizeSegments(input: any): Segment[] | null {
   return null;
 }
 
+function normalizeVariationIds(input: any): string[] {
+  if (!input) return [];
+
+  // Already an array
+  if (Array.isArray(input)) {
+    return input
+      .map((x) => String(x ?? "").trim())
+      .filter((x) => x.length > 0);
+  }
+
+  // String: could be JSON array or comma-separated
+  if (typeof input === "string") {
+    const s = input.trim();
+    if (!s) return [];
+
+    // JSON array string
+    if (s.startsWith("[") && s.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((x) => String(x ?? "").trim())
+            .filter((x) => x.length > 0);
+        }
+      } catch {
+        // fallthrough
+      }
+    }
+
+    // comma-separated
+    return s
+      .split(",")
+      .map((x) => x.trim())
+      .filter((x) => x.length > 0);
+  }
+
+  return [];
+}
+
 async function findOrCreateSquareCustomer(params: {
   accessToken: string;
   customer: CustomerBody;
@@ -124,23 +141,26 @@ async function findOrCreateSquareCustomer(params: {
 
   // Only re-use an existing Square customer if BOTH email + phone match
   if (email && phone) {
-    const searchResp = await fetch("https://connect.squareup.com/v2/customers/search", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
-      },
-      body: JSON.stringify({
-        query: {
-          filter: {
-            email_address: { exact: email },
-            phone_number: { exact: phone },
-          },
+    const searchResp = await fetch(
+      "https://connect.squareup.com/v2/customers/search",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
         },
-        limit: 1,
-      }),
-    });
+        body: JSON.stringify({
+          query: {
+            filter: {
+              email_address: { exact: email },
+              phone_number: { exact: phone },
+            },
+          },
+          limit: 1,
+        }),
+      }
+    );
 
     const searchJson = await searchResp.json().catch(() => null);
     const found = searchJson?.customers?.[0]?.id;
@@ -156,7 +176,7 @@ async function findOrCreateSquareCustomer(params: {
       "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
     },
     body: JSON.stringify({
-      given_name: (customer.first_name || "Guest").trim(),
+      given_name: (customer.first_name || "").trim(),
       family_name: (customer.last_name || "").trim() || undefined,
       email_address: email || undefined,
       phone_number: phone || undefined,
@@ -165,8 +185,8 @@ async function findOrCreateSquareCustomer(params: {
 
   const createJson = await createResp.json().catch(() => null);
   const id = createJson?.customer?.id;
-  if (!createResp.ok || !id) return null;
 
+  if (!createResp.ok || !id) return null;
   return id as string;
 }
 
@@ -185,12 +205,11 @@ async function squareAvailabilitySearch(params: {
   locationId: string;
   startAt: string;
   endAt: string;
-  variationIds: string[];
+  segmentFilters: { service_variation_id: string }[];
   teamMemberId?: string;
 }) {
-  const { accessToken, locationId, startAt, endAt, variationIds, teamMemberId } = params;
-
-  const segmentFilters = variationIds.map((id) => ({ service_variation_id: id }));
+  const { accessToken, locationId, startAt, endAt, segmentFilters, teamMemberId } =
+    params;
 
   const payload: any = {
     query: {
@@ -206,15 +225,18 @@ async function squareAvailabilitySearch(params: {
     payload.query.filter.bookable_time_filters = [{ team_member_id: teamMemberId }];
   }
 
-  const res = await fetch("https://connect.squareup.com/v2/bookings/availability/search", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
-    },
-    body: JSON.stringify(payload),
-  });
+  const res = await fetch(
+    "https://connect.squareup.com/v2/bookings/availability/search",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "Square-Version": process.env.SQUARE_VERSION || "2025-01-23",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
 
   const json = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, json };
@@ -227,72 +249,54 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => null)) as Body | null;
 
-  await logApiEvent({
-    route: "square.bookings/create",
-    client_id: body?.client_id,
-    ok: undefined,
-    debug_id: debugId,
-    request: {
-      start_at: body?.start_at,
-      location_id: body?.location_id,
-      service_variation_ids: body?.service_variation_ids,
-      team_member_id: body?.team_member_id,
-      customer: body?.customer ? { ...body.customer, email: body.customer.email ? "***" : "" } : undefined,
-    },
-  });
-
-  if (!body?.client_id || !body?.start_at || !body?.customer?.first_name) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body?.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 400,
-      response: { error: "Missing required fields" },
-    });
-
+  // Hard-validate required fields (no silent fallbacks)
+  const firstName = (body?.customer?.first_name || "").trim();
+  if (!body?.client_id || !body?.start_at || !firstName) {
     return NextResponse.json(
       { ok: false, error: "Missing required fields", debug_id: debugId },
       { status: 400 }
     );
   }
 
-  // Prefer service_variation_ids (simplest, Vapi-friendly)
-  let variationIds = normalizeVariationIds(body.service_variation_ids) || [];
+  if (!isValidIsoDateString(body.start_at)) {
+    return NextResponse.json(
+      { ok: false, error: "Invalid start_at (must be ISO datetime)", debug_id: debugId },
+      { status: 400 }
+    );
+  }
 
-  // Back-compat: derive from segments if variationIds not provided
+  // Resolve variation IDs (preferred) OR derive from segments (backward compat)
+  let variationIds = normalizeVariationIds(body.service_variation_ids);
+
   if (variationIds.length === 0) {
     const segments =
       normalizeSegments(body.appointment_segments) ||
       normalizeSegments(body.availability_segments) ||
       null;
 
-    if (segments && segments.length) {
+    if (segments && segments.length > 0) {
       variationIds = segments
-        .map((s) => (s?.service_variation_id || "").trim())
-        .filter(Boolean);
+        .map((s) => String(s?.service_variation_id || "").trim())
+        .filter((x) => x.length > 0);
     }
   }
 
   if (variationIds.length === 0) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 400,
-      response: { error: "Must provide service_variation_ids (or appointment_segments)" },
-    });
-
     return NextResponse.json(
-      { ok: false, error: "Must provide service_variation_ids (or appointment_segments)", debug_id: debugId },
+      {
+        ok: false,
+        error: "Missing service_variation_ids (or valid appointment_segments)",
+        debug_id: debugId,
+      },
       { status: 400 }
     );
   }
 
-  const supabase = createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: { persistSession: false },
-  });
+  const supabase = createClient(
+    getEnv("SUPABASE_URL"),
+    getEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    { auth: { persistSession: false } }
+  );
 
   const { data: client, error: clientErr } = await supabase
     .from("clients")
@@ -301,32 +305,19 @@ export async function POST(req: Request) {
     .single();
 
   if (clientErr || !client?.square_access_token) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 400,
-      response: { error: "Client missing Square connection", details: clientErr },
-    });
-
     return NextResponse.json(
-      { ok: false, error: "Client missing Square connection", details: clientErr, debug_id: debugId },
+      {
+        ok: false,
+        error: "Client missing Square connection",
+        details: clientErr,
+        debug_id: debugId,
+      },
       { status: 400 }
     );
   }
 
   const locationId = (body.location_id || client.square_location_id || "").trim();
   if (!locationId) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 400,
-      response: { error: "Missing location_id" },
-    });
-
     return NextResponse.json(
       { ok: false, error: "Missing location_id", debug_id: debugId },
       { status: 400 }
@@ -334,59 +325,65 @@ export async function POST(req: Request) {
   }
 
   // ---- Availability-locking ----
-  // Window: start_at - 30m to start_at + 8h (clamped to future).
-  const requested = new Date(body.start_at);
-  const requestedIso = Number.isNaN(requested.getTime()) ? nowPlusMinutesIso(10) : requested.toISOString();
+  // Window: start_at - 30m to start_at + 8h (clamped to future)
+  const requestedIso = stripMs(new Date(body.start_at).toISOString());
 
   const windowStart = new Date(
-    Math.max(new Date(addMinutesIso(requestedIso, -30)).getTime(), Date.now() + 5 * 60 * 1000)
+    Math.max(
+      new Date(addMinutesIso(requestedIso, -30)).getTime(),
+      Date.now() + 5 * 60 * 1000
+    )
   ).toISOString();
+
   const windowEnd = addMinutesIso(windowStart, 8 * 60);
+
+  const segmentFilters = variationIds
+    .map((id) => String(id || "").trim())
+    .filter((id) => id.length > 0)
+    .map((id) => ({ service_variation_id: id }));
+
+  if (segmentFilters.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "service_variation_ids contained no valid ids", debug_id: debugId },
+      { status: 400 }
+    );
+  }
 
   const availAttempt = await squareAvailabilitySearch({
     accessToken: client.square_access_token,
     locationId,
     startAt: windowStart,
     endAt: windowEnd,
-    variationIds,
+    segmentFilters,
     teamMemberId: body.team_member_id,
   });
 
   if (!availAttempt.ok) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 500,
-      response: { error: "Square availability failed", details: availAttempt.json },
-    });
-
     return NextResponse.json(
       { ok: false, error: "Square availability failed", details: availAttempt.json, debug_id: debugId },
       { status: 500 }
     );
   }
 
-  const slots: any[] = Array.isArray(availAttempt.json?.availabilities) ? availAttempt.json.availabilities : [];
-  if (slots.length === 0) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 409,
-      response: { error: "No availability near requested time", windowStart, windowEnd },
-    });
+  const slots: any[] = Array.isArray(availAttempt.json?.availabilities)
+    ? availAttempt.json.availabilities
+    : [];
 
+  if (slots.length === 0) {
     return NextResponse.json(
-      { ok: false, error: "No availability near requested time", details: { windowStart, windowEnd }, debug_id: debugId },
+      {
+        ok: false,
+        error: "No availability near requested time",
+        details: { windowStart, windowEnd },
+        debug_id: debugId,
+      },
       { status: 409 }
     );
   }
 
-  // Prefer exact start_at match; else soonest slot after requested time.
-  let chosen = slots.find((s) => s?.start_at === requestedIso);
+  // Prefer exact start_at match (ignoring milliseconds), else soonest after requested.
+  let chosen = slots.find((s) => stripMs(String(s?.start_at || "")) === requestedIso);
+
   if (!chosen) {
     const reqMs = new Date(requestedIso).getTime();
     const sorted = slots
@@ -399,15 +396,6 @@ export async function POST(req: Request) {
 
   const chosenSegments = chosen?.appointment_segments;
   if (!chosen?.start_at || !chosenSegments) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 500,
-      response: { error: "Square returned invalid availability slot", chosen },
-    });
-
     return NextResponse.json(
       { ok: false, error: "Square returned invalid availability slot", details: chosen, debug_id: debugId },
       { status: 500 }
@@ -417,19 +405,13 @@ export async function POST(req: Request) {
   // Create/find Square customer
   const customerId = await findOrCreateSquareCustomer({
     accessToken: client.square_access_token,
-    customer: body.customer,
+    customer: {
+      ...body.customer,
+      first_name: firstName,
+    },
   });
 
   if (!customerId) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 500,
-      response: { error: "Failed to create/find Square customer" },
-    });
-
     return NextResponse.json(
       { ok: false, error: "Failed to create/find Square customer", debug_id: debugId },
       { status: 500 }
@@ -463,29 +445,11 @@ export async function POST(req: Request) {
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    await logApiEvent({
-      route: "square.bookings/create",
-      client_id: body.client_id,
-      ok: false,
-      debug_id: debugId,
-      status_code: 500,
-      response: { error: "Square booking create failed", details: json },
-    });
-
     return NextResponse.json(
       { ok: false, error: "Square booking create failed", details: json, debug_id: debugId },
       { status: 500 }
     );
   }
-
-  await logApiEvent({
-    route: "square.bookings/create",
-    client_id: body.client_id,
-    ok: true,
-    debug_id: debugId,
-    status_code: 200,
-    response: { booking_id: json?.booking?.id || json?.booking?.booking?.id || null },
-  });
 
   return NextResponse.json({ ok: true, booking: json, debug_id: debugId });
 }
