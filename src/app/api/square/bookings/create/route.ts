@@ -1,52 +1,34 @@
 import { NextResponse } from "next/server";
 
 /**
- * Square Bookings Create (STRICT)
- * - Requires an exact start_at (RFC3339) from the availability you already showed the caller.
- * - Requires team_member_id + service_variation_id (+ version if you have it).
- * - Creates or reuses a Square customer (by phone) and then creates the booking.
- *
- * ENV REQUIRED:
- * - SQUARE_ACCESS_TOKEN
- * - SQUARE_ENV (optional): "production" | "sandbox" (default: production)
+ * Square Bookings Create (STRICT) — v2
+ * Adds:
+ *  - GET version check
+ *  - Returns Square error bodies to the caller for debugging
  */
 
-type CreateBookingInput = {
-  // Exact slot to book (MUST be the exact start_at you offered)
-  start_at: string;
+const VERSION = "strict_v2";
 
-  // Square location where booking belongs
+type CreateBookingInput = {
+  start_at: string; // RFC3339 exact slot
   location_id: string;
 
-  // Service segment
   team_member_id: string;
   service_variation_id: string;
   service_variation_version?: number;
-
-  // MUST match what Square will actually block (we will keep this REQUIRED for now)
   duration_minutes: number;
 
-  // Customer
   customer: {
     first_name: string;
     last_name: string;
-    phone: string; // prefer E.164, we will normalize basic US numbers
+    phone: string;
     email?: string;
   };
 
-  // Mobile appointment address (free-form is ok; we store it in booking notes for now)
   appointment_address: string;
 
-  // Notes / special requests
   notes?: string;
-
-  // Vehicle info (optional but useful)
-  vehicle?: {
-    make_model?: string;
-    color?: string;
-  };
-
-  // How they found you (optional)
+  vehicle?: { make_model?: string; color?: string };
   referral_source?: string;
 };
 
@@ -64,24 +46,17 @@ function mustEnv(name: string) {
 }
 
 function isRfc3339(s: string) {
-  // basic check, Square expects RFC3339 like 2026-01-07T16:00:00Z or with offset
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+\-]\d{2}:\d{2})$/.test(s);
 }
 
 function normalizePhone(phone: string) {
   const raw = (phone || "").trim();
   if (!raw) return "";
-
-  // keep + if already E.164-ish
   if (raw.startsWith("+")) return raw;
 
-  // strip non-digits
   const digits = raw.replace(/\D/g, "");
-  // if US 10 digits, add +1
   if (digits.length === 10) return `+1${digits}`;
-  // if 11 digits and starts with 1, treat as US
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  // fallback: return digits with +
   return digits ? `+${digits}` : "";
 }
 
@@ -114,10 +89,10 @@ async function squareFetch(path: string, body: any) {
   return { res, json };
 }
 
-async function findOrCreateCustomer(input: CreateBookingInput) {
+async function findOrCreateCustomer(input: CreateBookingInput, requestId: string) {
   const phone = normalizePhone(input.customer.phone);
 
-  // 1) Search by phone
+  // Search by phone first
   if (phone) {
     const searchBody = {
       query: {
@@ -130,22 +105,23 @@ async function findOrCreateCustomer(input: CreateBookingInput) {
 
     const { res, json } = await squareFetch("/v2/customers/search", searchBody);
 
-    if (res.ok && json?.customers?.length) {
-      return { customer_id: json.customers[0].id as string, phone };
-    }
-
-    // If search fails for any reason, we continue to create (but keep logs)
     console.log(
       JSON.stringify({
+        requestId,
         at: "square.customers.search",
         ok: res.ok,
         status: res.status,
-        json,
+        phone,
+        square: json,
       })
     );
+
+    if (res.ok && json?.customers?.length) {
+      return { customer_id: json.customers[0].id as string, phone };
+    }
   }
 
-  // 2) Create customer
+  // Create customer
   const createBody: any = {
     given_name: input.customer.first_name,
     family_name: input.customer.last_name,
@@ -153,7 +129,6 @@ async function findOrCreateCustomer(input: CreateBookingInput) {
   if (phone) createBody.phone_number = phone;
   if (input.customer.email) createBody.email_address = input.customer.email;
 
-  // Put useful details into customer note (safe + simple)
   const lines: string[] = [];
   if (input.appointment_address) lines.push(`Address: ${input.appointment_address}`);
   if (input.vehicle?.make_model) lines.push(`Vehicle: ${input.vehicle.make_model}`);
@@ -163,11 +138,26 @@ async function findOrCreateCustomer(input: CreateBookingInput) {
 
   const { res, json } = await squareFetch("/v2/customers", createBody);
 
+  console.log(
+    JSON.stringify({
+      requestId,
+      at: "square.customers.create",
+      ok: res.ok,
+      status: res.status,
+      phone,
+      square: json,
+    })
+  );
+
   if (!res.ok || !json?.customer?.id) {
     return { error: "Square customer create failed", details: json };
   }
 
   return { customer_id: json.customer.id as string, phone };
+}
+
+export async function GET() {
+  return NextResponse.json({ ok: true, version: VERSION });
 }
 
 export async function POST(req: Request) {
@@ -180,15 +170,13 @@ export async function POST(req: Request) {
     return jsonErr(400, "Invalid JSON body");
   }
 
-  // --- STRICT VALIDATION ---
+  // STRICT validation
   const missing: string[] = [];
-
   if (!input?.start_at) missing.push("start_at");
   if (!input?.location_id) missing.push("location_id");
   if (!input?.team_member_id) missing.push("team_member_id");
   if (!input?.service_variation_id) missing.push("service_variation_id");
   if (!input?.duration_minutes) missing.push("duration_minutes");
-
   if (!input?.customer?.first_name) missing.push("customer.first_name");
   if (!input?.customer?.last_name) missing.push("customer.last_name");
   if (!input?.customer?.phone) missing.push("customer.phone");
@@ -203,30 +191,26 @@ export async function POST(req: Request) {
         received: input,
       })
     );
-    return jsonErr(
-      400,
-      "Missing required fields",
-      { missing, requestId }
-    );
+    return jsonErr(400, "Missing required fields", { missing, requestId });
   }
 
   if (!isRfc3339(input.start_at)) {
-    console.log(
-      JSON.stringify({
-        requestId,
-        at: "square.bookings.create.reject_bad_start_at",
-        start_at: input.start_at,
-        received: input,
-      })
-    );
     return jsonErr(400, "start_at must be RFC3339 (ex: 2026-01-07T16:00:00Z)", { requestId });
   }
 
-  // Log the booking attempt (this is what we will use to verify Vapi is sending the RIGHT date/time)
+  const normalizedPhone = normalizePhone(input.customer.phone);
+  if (!normalizedPhone || normalizedPhone.length < 8) {
+    return jsonErr(400, "customer.phone is invalid (need a real phone number)", {
+      requestId,
+      received: input.customer.phone,
+    });
+  }
+
   console.log(
     JSON.stringify({
       requestId,
       at: "square.bookings.create.request",
+      version: VERSION,
       start_at: input.start_at,
       location_id: input.location_id,
       team_member_id: input.team_member_id,
@@ -236,7 +220,7 @@ export async function POST(req: Request) {
       customer: {
         first_name: input.customer.first_name,
         last_name: input.customer.last_name,
-        phone: normalizePhone(input.customer.phone),
+        phone: normalizedPhone,
         email: input.customer.email || null,
       },
       appointment_address: input.appointment_address,
@@ -244,19 +228,17 @@ export async function POST(req: Request) {
   );
 
   // 1) Customer
-  const cust = await findOrCreateCustomer(input);
+  const cust = await findOrCreateCustomer(input, requestId);
   if ((cust as any).error) {
-    console.log(
-      JSON.stringify({
-        requestId,
-        at: "square.bookings.create.customer_failed",
-        details: (cust as any).details,
-      })
-    );
-    return jsonErr(502, (cust as any).error, { requestId, square: (cust as any).details });
+    return jsonErr(502, "Failed to create/find Square customer", {
+      requestId,
+      square: (cust as any).details,
+      hint:
+        "If square shows 'ACCESS_DENIED' or permissions errors, your Square token is missing CUSTOMERS_READ/CUSTOMERS_WRITE scopes.",
+    });
   }
 
-  // 2) Booking create (MUST use exact start_at)
+  // 2) Booking create
   const idempotency_key = crypto.randomUUID();
 
   const bookingBody: any = {
