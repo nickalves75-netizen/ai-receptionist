@@ -1,279 +1,165 @@
-import { NextResponse } from "next/server";
-import crypto from "crypto";
+// src/app/api/square/bookings/create/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { createBooking, upsertCustomer, normalizeEmail, normalizePhone } from "@/lib/square";
 
-/**
- * Square Bookings Create (STRICT) — v3
- * - GET: health/version check (fixes your 405 test in browser)
- * - POST: upserts customer (simple + safe) then creates booking
- * - Returns Square error bodies for debugging
- */
-
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const VERSION = "strict_v3";
-
-type CreateBookingInput = {
-  start_at: string; // MUST be exact slot start ISO string (e.g. 2026-01-07T16:00:00Z)
-  location_id: string;
-
-  team_member_id: string;
-  service_variation_id: string;
-  service_variation_version?: number;
-  duration_minutes: number;
-
-  customer: {
-    first_name: string;
-    last_name: string;
-    phone: string; // required
-    email?: string; // optional
-  };
-
-  appointment_address: string; // freeform (we store in notes to avoid Square address shape failures)
-  notes?: string;
-  vehicle?: { make_model?: string; color?: string };
-  referral_source?: string;
-};
-
-function jsonError(status: number, payload: any) {
-  return NextResponse.json(payload, { status });
+function deny(msg: string) {
+  return NextResponse.json({ ok: false, error: msg }, { status: 401 });
 }
 
-function squareBaseUrl() {
-  const env = (process.env.SQUARE_ENV || "").toLowerCase();
-  return env === "production" ? "https://connect.squareup.com" : "https://connect.squareupsandbox.com";
+function requireSecret(req: NextRequest) {
+  const expected = process.env.VAPI_TOOL_SECRET;
+  if (!expected) return true; // allow if you didn't set it yet (not recommended)
+  const got = req.headers.get("x-kallr-secret") || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  return got === expected;
 }
 
-function squareHeaders() {
-  const token = process.env.SQUARE_ACCESS_TOKEN;
-  if (!token) throw new Error("Missing SQUARE_ACCESS_TOKEN");
-  return {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
-    // If you already set a different Square-Version elsewhere, it's fine — this is a safe default.
-    "Square-Version": "2024-06-04",
-  };
-}
-
-function normalizePhoneToE164(raw: string): string {
-  const s = (raw || "").trim();
-  if (!s) return s;
-
-  // Already E.164
-  if (s.startsWith("+")) return s;
-
-  // Strip non-digits
-  const digits = s.replace(/\D/g, "");
-
-  // US default behavior
-  if (digits.length === 10) return `+1${digits}`;
-  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-
-  // Fallback: just prefix + (may still fail, but better than raw formatting)
-  return `+${digits}`;
-}
-
-function safeStr(v: any) {
-  return typeof v === "string" ? v.trim() : "";
-}
-
-function isIsoDateString(v: string) {
-  // simple check — Square will validate strictly, but this prevents obvious garbage
-  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v);
-}
-
-async function squareFetch(path: string, init: RequestInit) {
-  const url = `${squareBaseUrl()}${path}`;
-  const res = await fetch(url, init);
-  const text = await res.text();
-  let body: any = null;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    body = { raw: text };
-  }
-  return { ok: res.ok, status: res.status, body };
-}
-
-async function upsertCustomer(input: CreateBookingInput) {
-  const first = safeStr(input.customer.first_name);
-  const last = safeStr(input.customer.last_name);
-  const phone = normalizePhoneToE164(input.customer.phone);
-  const email = safeStr(input.customer.email || "");
-
-  if (!first || !last) throw new Error("Customer first_name and last_name are required");
-  if (!phone) throw new Error("Customer phone is required");
-
-  // 1) Try search by phone/email (best-effort; if it fails, we still create)
-  // NOTE: Square customer search supports a filter query; if Square rejects, we fall back safely.
-  let foundId: string | null = null;
-
-  try {
-    const searchBody: any = {
-      limit: 1,
-      query: {
-        filter: {
-          // We try both if available
-          ...(phone ? { phone_number: { exact: phone } } : {}),
-          ...(email ? { email_address: { exact: email } } : {}),
-        },
-      },
-    };
-
-    const search = await squareFetch("/v2/customers/search", {
-      method: "POST",
-      headers: squareHeaders(),
-      body: JSON.stringify(searchBody),
-    });
-
-    if (search.ok && search.body?.customers?.length) {
-      foundId = search.body.customers[0]?.id || null;
+function coerceJsonMaybe(v: any) {
+  if (typeof v !== "string") return v;
+  const s = v.trim();
+  if (!s) return v;
+  if ((s.startsWith("{") && s.endsWith("}")) || (s.startsWith("[") && s.endsWith("]"))) {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return v;
     }
-  } catch {
-    // ignore search failure
   }
-
-  if (foundId) return foundId;
-
-  // 2) Create customer (keep it minimal to avoid validation failures)
-  const noteParts: string[] = [];
-  if (input.vehicle?.make_model) noteParts.push(`Vehicle: ${input.vehicle.make_model}`);
-  if (input.vehicle?.color) noteParts.push(`Color: ${input.vehicle.color}`);
-  if (input.referral_source) noteParts.push(`Referral: ${input.referral_source}`);
-  if (input.appointment_address) noteParts.push(`Default Address: ${input.appointment_address}`);
-  const note = noteParts.join(" | ").slice(0, 500);
-
-  const createBody: any = {
-    idempotency_key: crypto.randomUUID(),
-    given_name: first,
-    family_name: last,
-    phone_number: phone,
-    ...(email ? { email_address: email } : {}),
-    ...(note ? { note } : {}),
-  };
-
-  const created = await squareFetch("/v2/customers", {
-    method: "POST",
-    headers: squareHeaders(),
-    body: JSON.stringify(createBody),
-  });
-
-  if (!created.ok) {
-    return { error: "Failed to create Square customer", details: created.body, status: created.status };
-  }
-
-  const id = created.body?.customer?.id;
-  if (!id) {
-    return { error: "Square customer create returned no customer.id", details: created.body, status: 502 };
-  }
-
-  return id as string;
+  return v;
 }
 
 export async function GET() {
-  return NextResponse.json({
-    ok: true,
-    version: VERSION,
-    route: "/api/square/bookings/create",
-    env: (process.env.SQUARE_ENV || "sandbox").toLowerCase(),
-  });
+  return NextResponse.json(
+    {
+      ok: true,
+      message: "POST JSON to create a Square booking.",
+      preferred_shape: {
+        availability: { start_at: "ISO", location_id: "ID", appointment_segments: [{ duration_minutes: 0, team_member_id: "ID", service_variation_id: "ID", service_variation_version: 0 }] },
+        customer: { given_name: "First", family_name: "Last", email: "email", phone: "phone" },
+        notes: "optional",
+      },
+    },
+    { status: 200 }
+  );
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  if (!requireSecret(req)) return deny("Unauthorized");
+
+  const debug_id = crypto.randomUUID();
+
+  let body: any = {};
   try {
-    const input = (await req.json()) as CreateBookingInput;
-
-    // Validate required booking bits
-    if (!input || typeof input !== "object") {
-      return jsonError(400, { ok: false, error: "Missing JSON body" });
-    }
-
-    if (!isIsoDateString(input.start_at)) {
-      return jsonError(400, {
-        ok: false,
-        error: "start_at must be an ISO timestamp string (exact slot start)",
-        got: input.start_at,
-      });
-    }
-
-    if (!safeStr(input.location_id)) return jsonError(400, { ok: false, error: "location_id required" });
-    if (!safeStr(input.team_member_id)) return jsonError(400, { ok: false, error: "team_member_id required" });
-    if (!safeStr(input.service_variation_id))
-      return jsonError(400, { ok: false, error: "service_variation_id required" });
-
-    if (!Number.isFinite(input.duration_minutes) || input.duration_minutes <= 0) {
-      return jsonError(400, { ok: false, error: "duration_minutes must be a positive number" });
-    }
-
-    // Upsert customer
-    const customerIdOrErr = await upsertCustomer(input);
-    if (typeof customerIdOrErr !== "string") {
-      return jsonError(customerIdOrErr.status || 502, {
-        ok: false,
-        error: customerIdOrErr.error,
-        details: customerIdOrErr.details,
-        version: VERSION,
-      });
-    }
-    const customer_id = customerIdOrErr;
-
-    // Build notes (address MUST be captured; Square appointment address is complex, so store in notes reliably)
-    const noteLines: string[] = [];
-    if (input.appointment_address) noteLines.push(`Appointment Address: ${input.appointment_address}`);
-    if (input.vehicle?.make_model) noteLines.push(`Vehicle: ${input.vehicle.make_model}`);
-    if (input.vehicle?.color) noteLines.push(`Color: ${input.vehicle.color}`);
-    if (input.referral_source) noteLines.push(`Referral: ${input.referral_source}`);
-    if (input.notes) noteLines.push(`Notes: ${input.notes}`);
-
-    const customer_note = noteLines.join("\n").slice(0, 1000);
-
-    // Create booking
-    const bookingBody: any = {
-      idempotency_key: crypto.randomUUID(),
-      booking: {
-        start_at: input.start_at,
-        location_id: input.location_id,
-        customer_id,
-        appointment_segments: [
-          {
-            duration_minutes: input.duration_minutes,
-            team_member_id: input.team_member_id,
-            service_variation_id: input.service_variation_id,
-            ...(Number.isFinite(input.service_variation_version)
-              ? { service_variation_version: input.service_variation_version }
-              : {}),
-          },
-        ],
-        ...(customer_note ? { customer_note } : {}),
-      },
-    };
-
-    const created = await squareFetch("/v2/bookings", {
-      method: "POST",
-      headers: squareHeaders(),
-      body: JSON.stringify(bookingBody),
-    });
-
-    if (!created.ok) {
-      return jsonError(created.status, {
-        ok: false,
-        error: "Square booking create failed",
-        details: created.body,
-        version: VERSION,
-      });
-    }
-
-    return NextResponse.json({
-      ok: true,
-      version: VERSION,
-      customer_id,
-      booking: created.body?.booking || created.body,
-    });
-  } catch (err: any) {
-    return jsonError(500, {
-      ok: false,
-      error: err?.message || "Unknown error",
-      version: VERSION,
-    });
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Invalid JSON", debug_id }, { status: 400 });
   }
+
+  // Accept both the NEW shape (availability object) and your LEGACY shape (flat fields)
+  const availability = coerceJsonMaybe(body.availability) || {};
+  const customerIn = coerceJsonMaybe(body.customer) || {};
+
+  const location_id = String(
+    availability.location_id ||
+      body.location_id ||
+      process.env.SQUARE_LOCATION_ID ||
+      ""
+  );
+
+  const start_at = String(availability.start_at || body.start_at || "");
+
+  // appointment_segments can arrive as JSON string if the tool schema was wrong
+  const appointment_segments = coerceJsonMaybe(availability.appointment_segments || body.appointment_segments);
+
+  if (!location_id) {
+    return NextResponse.json({ ok: false, error: "Missing location_id (or SQUARE_LOCATION_ID env)", debug_id }, { status: 400 });
+  }
+  if (!start_at) {
+    return NextResponse.json({ ok: false, error: "Missing start_at", debug_id }, { status: 400 });
+  }
+  if (!Array.isArray(appointment_segments) || appointment_segments.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: "Missing appointment_segments[] (tip: pass the availability object from the availability tool)", debug_id },
+      { status: 400 }
+    );
+  }
+
+  // Normalize customer inputs (speech-to-text safe)
+  const customer = {
+    given_name: String(customerIn.given_name || customerIn.first_name || "").trim() || undefined,
+    family_name: String(customerIn.family_name || customerIn.last_name || "").trim() || undefined,
+    email: normalizeEmail(customerIn.email || customerIn.email_address),
+    phone: normalizePhone(customerIn.phone || customerIn.phone_number),
+  };
+
+  // IMPORTANT: do NOT fail booking just because email is invalid.
+  // We'll upsert using email/phone if possible, otherwise create a new customer record.
+  const upsert = await upsertCustomer(
+    {
+      given_name: customer.given_name,
+      family_name: customer.family_name,
+      email: customer.email,
+      phone: customer.phone,
+    },
+    debug_id
+  );
+
+  if (!upsert.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Failed to create/find Square customer",
+        debug_id: upsert.debug_id,
+        square_trace_id: upsert.square_trace_id,
+        square_errors: upsert.square_errors,
+        hint:
+          "Most common causes: invalid email/phone, missing SQUARE_ACCESS_TOKEN in production env, or token lacks permissions.",
+      },
+      { status: 502 }
+    );
+  }
+
+  const notes = typeof body.notes === "string" ? body.notes : undefined;
+
+  const booking = await createBooking(
+    {
+      location_id,
+      start_at,
+      customer_id: upsert.data.customer_id,
+      customer_note: notes,
+      appointment_segments,
+    },
+    debug_id
+  );
+
+  if (!booking.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Failed to create booking in Square",
+        debug_id: booking.debug_id,
+        square_trace_id: booking.square_trace_id,
+        square_errors: booking.square_errors,
+      },
+      { status: 502 }
+    );
+  }
+
+  const bookingId = booking.data?.booking?.id;
+
+  return NextResponse.json(
+    {
+      ok: true,
+      debug_id: booking.debug_id,
+      square_trace_id: booking.square_trace_id,
+      booking_id: bookingId,
+      booking: booking.data?.booking,
+    },
+    { status: 200 }
+  );
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204 });
 }
