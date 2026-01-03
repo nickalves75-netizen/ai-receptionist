@@ -11,7 +11,9 @@ function deny(msg: string) {
 function requireSecret(req: NextRequest) {
   const expected = process.env.VAPI_TOOL_SECRET;
   if (!expected) return true; // allow if you didn't set it yet (not recommended)
-  const got = req.headers.get("x-kallr-secret") || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const got =
+    req.headers.get("x-kallr-secret") ||
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   return got === expected;
 }
 
@@ -35,8 +37,22 @@ export async function GET() {
       ok: true,
       message: "POST JSON to create a Square booking.",
       preferred_shape: {
-        availability: { start_at: "ISO", location_id: "ID", appointment_segments: [{ duration_minutes: 0, team_member_id: "ID", service_variation_id: "ID", service_variation_version: 0 }] },
+        availability: {
+          start_at: "ISO",
+          location_id: "ID",
+          appointment_segments: [
+            {
+              duration_minutes: 0,
+              team_member_id: "ID",
+              service_variation_id: "ID",
+              service_variation_version: 0,
+            },
+          ],
+        },
         customer: { given_name: "First", family_name: "Last", email: "email", phone: "phone" },
+        service_name: "Platinum Detail",
+        vehicle: "2018 Audi A4 (Coupe/Sedan)",
+        address_text: "123 Main St, Boston, MA",
         notes: "optional",
       },
     },
@@ -56,7 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid JSON", debug_id }, { status: 400 });
   }
 
-  // Accept both the NEW shape (availability object) and your LEGACY shape (flat fields)
+  // Accept both the NEW shape (availability object) and legacy flat fields
   const availability = coerceJsonMaybe(body.availability) || {};
   const customerIn = coerceJsonMaybe(body.customer) || {};
 
@@ -69,18 +85,28 @@ export async function POST(req: NextRequest) {
 
   const start_at = String(availability.start_at || body.start_at || "");
 
-  // appointment_segments can arrive as JSON string if the tool schema was wrong
-  const appointment_segments = coerceJsonMaybe(availability.appointment_segments || body.appointment_segments);
+  // appointment_segments can arrive as JSON string if tool schema is wrong
+  const appointment_segments = coerceJsonMaybe(
+    availability.appointment_segments || body.appointment_segments
+  );
 
   if (!location_id) {
-    return NextResponse.json({ ok: false, error: "Missing location_id (or SQUARE_LOCATION_ID env)", debug_id }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "Missing location_id (or SQUARE_LOCATION_ID env)", debug_id },
+      { status: 400 }
+    );
   }
   if (!start_at) {
     return NextResponse.json({ ok: false, error: "Missing start_at", debug_id }, { status: 400 });
   }
   if (!Array.isArray(appointment_segments) || appointment_segments.length === 0) {
     return NextResponse.json(
-      { ok: false, error: "Missing appointment_segments[] (tip: pass the availability object from the availability tool)", debug_id },
+      {
+        ok: false,
+        error:
+          "Missing appointment_segments[] (tip: pass the chosen availability slot object from squareAvailability)",
+        debug_id,
+      },
       { status: 400 }
     );
   }
@@ -93,8 +119,7 @@ export async function POST(req: NextRequest) {
     phone: normalizePhone(customerIn.phone || customerIn.phone_number),
   };
 
-  // IMPORTANT: do NOT fail booking just because email is invalid.
-  // We'll upsert using email/phone if possible, otherwise create a new customer record.
+  // Upsert customer (do not fail booking just because email is missing/invalid)
   const upsert = await upsertCustomer(
     {
       given_name: customer.given_name,
@@ -120,7 +145,32 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const notes = typeof body.notes === "string" ? body.notes : undefined;
+  // Enrich notes so Square booking always contains useful details
+  const notesParts: string[] = [];
+
+  if (typeof body.notes === "string" && body.notes.trim()) notesParts.push(body.notes.trim());
+
+  const addr = (
+    body.address_text ||
+    body.service_address ||
+    customerIn.address_text ||
+    ""
+  ).toString().trim();
+
+  const vehicle = (
+    body.vehicle ||
+    body.vehicle_text ||
+    body.vehicle_year_make_model ||
+    ""
+  ).toString().trim();
+
+  const serviceName = (body.service_name || "").toString().trim();
+
+  if (serviceName) notesParts.push(`Service: ${serviceName}`);
+  if (vehicle) notesParts.push(`Vehicle: ${vehicle}`);
+  if (addr) notesParts.push(`Address: ${addr}`);
+
+  const notes = notesParts.length ? notesParts.join(" | ") : "Booked via Kallr";
 
   const booking = await createBooking(
     {
