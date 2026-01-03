@@ -1,99 +1,135 @@
-// src/app/api/square/availability/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { searchAvailability } from "@/lib/square";
 
 export const runtime = "nodejs";
 
-function deny(msg: string) {
-  return NextResponse.json({ ok: false, error: msg }, { status: 401 });
-}
-
 function requireSecret(req: NextRequest) {
   const expected = process.env.VAPI_TOOL_SECRET;
-  if (!expected) return true; // allow if you didn't set it yet (not recommended)
-  const got = req.headers.get("x-kallr-secret") || req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (!expected) return true; // not recommended, but keeps dev from breaking if unset
+  const got =
+    req.headers.get("x-kallr-secret") ||
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   return got === expected;
 }
 
-function toIso(d: Date) {
-  return d.toISOString();
-}
-
-function coerceDate(raw?: string): Date | null {
-  if (!raw) return null;
-  const d = new Date(raw);
-  return isNaN(d.getTime()) ? null : d;
+function jsonError(status: number, payload: any) {
+  return NextResponse.json(payload, { status });
 }
 
 export async function GET() {
-  // So your browser test doesn't show 405
   return NextResponse.json(
     {
       ok: true,
-      message: "POST JSON to this endpoint to search Square availability.",
-      required: ["service_variation_ids"],
-      optional: ["start_at", "end_at", "location_id", "client_id"],
+      message: "POST { service_variation_ids: [..] } to search availability for the next 14 days.",
     },
     { status: 200 }
   );
 }
 
 export async function POST(req: NextRequest) {
-  if (!requireSecret(req)) return deny("Unauthorized");
+  if (!requireSecret(req)) {
+    return jsonError(401, { ok: false, error: "Unauthorized" });
+  }
 
   const debug_id = crypto.randomUUID();
+
+  const token = process.env.SQUARE_ACCESS_TOKEN;
+  const location_id = process.env.SQUARE_LOCATION_ID;
+
+  if (!token) return jsonError(500, { ok: false, error: "Missing SQUARE_ACCESS_TOKEN", debug_id });
+  if (!location_id) return jsonError(500, { ok: false, error: "Missing SQUARE_LOCATION_ID", debug_id });
 
   let body: any = {};
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ ok: false, error: "Invalid JSON", debug_id }, { status: 400 });
+    return jsonError(400, { ok: false, error: "Invalid JSON", debug_id });
   }
 
-  const location_id = String(body.location_id || process.env.SQUARE_LOCATION_ID || "");
-  const service_variation_ids = Array.isArray(body.service_variation_ids)
-    ? body.service_variation_ids.map(String)
-    : [];
-
-  if (!location_id) {
-    return NextResponse.json({ ok: false, error: "Missing location_id (or SQUARE_LOCATION_ID env)", debug_id }, { status: 400 });
-  }
-  if (!service_variation_ids.length) {
-    return NextResponse.json({ ok: false, error: "Missing service_variation_ids[]", debug_id }, { status: 400 });
+  const ids = body?.service_variation_ids;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return jsonError(400, { ok: false, error: "service_variation_ids must be a non-empty array", debug_id });
   }
 
+  // ALWAYS search from now (with a small buffer) out 14 days.
   const now = new Date();
-  const startRaw = coerceDate(body.start_at);
-  const endRaw = coerceDate(body.end_at);
+  const start = new Date(now.getTime() + 5 * 60 * 1000); // +5 minutes
+  const end = new Date(start.getTime() + 14 * 24 * 60 * 60 * 1000);
 
-  // If Vapi sends 2023/past: clamp to a safe future window
-  const start = !startRaw || startRaw.getTime() < now.getTime() - 60_000 ? now : startRaw;
-  const end =
-    !endRaw || endRaw.getTime() <= start.getTime()
-      ? new Date(start.getTime() + 7 * 24 * 60 * 60_000) // default: 7 days forward
-      : endRaw;
-
-  const result = await searchAvailability(
-    {
-      location_id,
-      service_variation_ids,
-      start_at: toIso(start),
-      end_at: toIso(end),
+  const payload = {
+    query: {
+      filter: {
+        location_id,
+        start_at_range: {
+          start_at: start.toISOString(),
+          end_at: end.toISOString(),
+        },
+        segment_filters: [
+          {
+            service_variation_id: ids[0],
+          },
+        ],
+      },
     },
-    debug_id
-  );
+  };
 
-  if (!result.ok) {
-    return NextResponse.json(result, { status: 502 });
+  // If you pass multiple ids (base + add-on), Square availability search expects segment_filters.
+  // We'll include each as a segment filter.
+  if (ids.length > 1) {
+    payload.query.filter.segment_filters = ids.map((sid: string) => ({ service_variation_id: sid }));
+  }
+
+  const res = await fetch("https://connect.squareup.com/v2/bookings/availability/search", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const square_trace_id =
+    res.headers.get("square-trace-id") ||
+    res.headers.get("x-request-id") ||
+    undefined;
+
+  let json: any = null;
+  try {
+    json = await res.json();
+  } catch {
+    json = null;
+  }
+
+  if (!res.ok) {
+    return jsonError(502, {
+      ok: false,
+      error: `Square API error (${res.status})`,
+      debug_id,
+      square_trace_id,
+      square_errors: json?.errors,
+      meta: {
+        used_location_id: location_id,
+        used_start_at: start.toISOString(),
+        used_end_at: end.toISOString(),
+        used_service_variation_ids: ids,
+      },
+    });
   }
 
   return NextResponse.json(
     {
       ok: true,
-      debug_id: result.debug_id,
-      square_trace_id: result.square_trace_id,
-      availability: result.data,
-      meta: { location_id, start_at: toIso(start), end_at: toIso(end), service_variation_ids },
+      debug_id,
+      square_trace_id,
+      meta: {
+        used_location_id: location_id,
+        used_start_at: start.toISOString(),
+        used_end_at: end.toISOString(),
+        used_service_variation_ids: ids,
+      },
+      availability: {
+        availabilities: json?.availabilities || [],
+        errors: json?.errors || [],
+      },
     },
     { status: 200 }
   );
