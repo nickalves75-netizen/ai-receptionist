@@ -57,43 +57,33 @@ async function squareFetch(token: string, path: string, init?: RequestInit) {
   return { res, json, square_trace_id };
 }
 
-function isIsoUtcZ(s: string) {
-  // We require UTC "Z" to prevent timezone mistakes (ET vs UTC).
-  return typeof s === "string" && /Z$/.test(s) && !isNaN(new Date(s).getTime());
-}
-
 export async function GET() {
   return NextResponse.json(
     {
       ok: true,
       message:
-        "POST JSON to create a Square booking. Preferred: pass the chosen option object from /api/square/availability (options[i]).",
+        "POST JSON to create a Square booking. If booking_id is provided, updates the existing booking instead of creating a duplicate.",
       preferred_shape: {
-        booking_id: "(optional) existing booking id to update instead of creating duplicate",
+        booking_id: "(optional) existing booking id to update",
         option: {
-          // directly pass ONE item from squareAvailability.options[]
-          start_at_utc: "2026-01-05T17:30:00Z",
-          display_et: "Monday, January 5th at 12:30 PM Eastern",
-          location_id: "LC....",
+          start_at_utc: "ISO UTC string (from squareAvailability.options[i].start_at_utc)",
+          location_id: "ID",
           appointment_segments: [
             {
-              duration_minutes: 150,
-              team_member_id: "TM....",
-              service_variation_id: "7D....",
-              service_variation_version: 123,
+              duration_minutes: 0,
+              team_member_id: "ID",
+              service_variation_id: "ID",
+              service_variation_version: 0,
             },
           ],
+          display_et: "(optional)",
         },
-        customer: { given_name: "First", family_name: "Last", email: "email", phone: "phone" },
+        customer: { first_name: "First", last_name: "Last", email: "email", phone: "phone" },
         service_name: "Platinum Detail",
-        vehicle: "2025 Tesla Model 3 (Coupe)",
+        vehicle: "2025 Tesla Model 3 (Coupe/Sedan)",
         address_text: "123 Main St, Stoughton, MA 02072",
         notes: "optional",
       },
-      important: [
-        "Do NOT pass local time. start_at must be UTC and end with 'Z'.",
-        "Best practice: always book using option.start_at_utc from availability options[].",
-      ],
     },
     { status: 200 }
   );
@@ -116,65 +106,37 @@ export async function POST(req: NextRequest) {
 
   const booking_id = typeof body.booking_id === "string" && body.booking_id.trim() ? body.booking_id.trim() : "";
 
-  // Accept:
-  // - option (preferred): one item from availability.options[]
-  // - availability (legacy): chosen availability slot object
-  // - legacy flat fields: start_at, location_id, appointment_segments
-  const option = coerceJsonMaybe(body.option || body.chosen_option || body.slot) || {};
+  // Accept BOTH shapes:
+  // - NEW: option { start_at_utc, location_id, appointment_segments }
+  // - LEGACY: availability { start_at, location_id, appointment_segments }
+  const option = coerceJsonMaybe(body.option) || {};
   const availability = coerceJsonMaybe(body.availability) || {};
   const customerIn = coerceJsonMaybe(body.customer) || {};
 
   const location_id = String(
-    option.location_id ||
-      availability.location_id ||
-      body.location_id ||
-      process.env.SQUARE_LOCATION_ID ||
-      ""
+    option.location_id || availability.location_id || body.location_id || process.env.SQUARE_LOCATION_ID || ""
   );
 
-  const start_at = String(
-    option.start_at_utc ||
-      availability.start_at ||
-      body.start_at ||
-      ""
-  );
+  // Square expects RFC3339; we pass UTC ISO from availability search (start_at_utc)
+  const start_at = String(option.start_at_utc || availability.start_at || body.start_at || "");
 
+  // appointment_segments can arrive as JSON string if tool schema is wrong
   const appointment_segments = coerceJsonMaybe(
-    option.appointment_segments ||
-      availability.appointment_segments ||
-      body.appointment_segments
+    option.appointment_segments || availability.appointment_segments || body.appointment_segments
   );
 
   if (!location_id) {
     return jsonError(400, { ok: false, error: "Missing location_id (or SQUARE_LOCATION_ID env)", debug_id });
   }
-
+  if (!start_at && !booking_id) {
+    return jsonError(400, { ok: false, error: "Missing option.start_at_utc (or start_at)", debug_id });
+  }
   if (!booking_id) {
-    if (!start_at) {
-      return jsonError(400, {
-        ok: false,
-        error: "Missing start_at. Pass option.start_at_utc from availability.options[]",
-        debug_id,
-      });
-    }
-
-    // HARD GUARD AGAINST TIMEZONE BUGS:
-    // If we allow non-Z, the assistant will keep booking wrong.
-    if (!isIsoUtcZ(start_at)) {
-      return jsonError(400, {
-        ok: false,
-        error:
-          "start_at must be a valid UTC ISO string ending with 'Z' (example: 2026-01-05T17:30:00Z). Use option.start_at_utc from /api/square/availability options[].",
-        debug_id,
-        received_start_at: start_at,
-      });
-    }
-
     if (!Array.isArray(appointment_segments) || appointment_segments.length === 0) {
       return jsonError(400, {
         ok: false,
         error:
-          "Missing appointment_segments[] (tip: pass the chosen option object from squareAvailability.options[])",
+          "Missing appointment_segments[] (tip: pass the chosen options[i].appointment_segments from squareAvailability)",
         debug_id,
       });
     }
@@ -182,13 +144,13 @@ export async function POST(req: NextRequest) {
 
   // Normalize customer inputs (speech-to-text safe)
   const customer = {
-    given_name: String(customerIn.given_name || customerIn.first_name || "").trim() || undefined,
-    family_name: String(customerIn.family_name || customerIn.last_name || "").trim() || undefined,
+    given_name: String(customerIn.given_name || customerIn.first_name || customerIn.first || "").trim() || undefined,
+    family_name: String(customerIn.family_name || customerIn.last_name || customerIn.last || "").trim() || undefined,
     email: normalizeEmail(customerIn.email || customerIn.email_address),
     phone: normalizePhone(customerIn.phone || customerIn.phone_number),
   };
 
-  // Upsert customer
+  // Upsert customer (do not fail booking just because email is missing/invalid)
   const upsert = await upsertCustomer(
     {
       given_name: customer.given_name,
@@ -209,56 +171,21 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // EXTRA HARDENING:
-  // Ensure phone/email are actually persisted even if upsertCustomer matched an existing record.
-  // If this fails, we still proceed (booking note will contain details).
-  let ensured_customer_update = false;
-  try {
-    const updateBody: any = {};
-    if (customer.given_name) updateBody.given_name = customer.given_name;
-    if (customer.family_name) updateBody.family_name = customer.family_name;
-    if (customer.email) updateBody.email_address = customer.email;
-    if (customer.phone) updateBody.phone_number = customer.phone;
-
-    if (Object.keys(updateBody).length > 0) {
-      const put = await squareFetch(token, `/v2/customers/${encodeURIComponent(upsert.data.customer_id)}`, {
-        method: "PUT",
-        body: JSON.stringify(updateBody),
-      });
-      ensured_customer_update = put.res.ok;
-    }
-  } catch {
-    ensured_customer_update = false;
-  }
-
   // Enrich notes so Square booking always contains useful details
   const notesParts: string[] = [];
+  if (typeof body.notes === "string" && body.notes.trim()) notesParts.push(body.notes.trim());
 
-  // Always include a stable origin tag
-  notesParts.push("Booked via Kallr");
-
-  const rawNotes = typeof body.notes === "string" ? body.notes.trim() : "";
-  if (rawNotes) notesParts.push(rawNotes);
-
-  const addr = (body.address_text || body.service_address || customerIn.address_text || "")
-    .toString()
-    .trim();
-  const vehicle = (body.vehicle || body.vehicle_text || body.vehicle_year_make_model || "")
-    .toString()
-    .trim();
-  const serviceName = (body.service_name || body.service || "")
-    .toString()
-    .trim();
+  const addr = (body.address_text || body.service_address || customerIn.address_text || "").toString().trim();
+  const vehicle = (body.vehicle || body.vehicle_text || body.vehicle_year_make_model || "").toString().trim();
+  const serviceName = (body.service_name || "").toString().trim();
 
   if (serviceName) notesParts.push(`Service: ${serviceName}`);
   if (vehicle) notesParts.push(`Vehicle: ${vehicle}`);
   if (addr) notesParts.push(`Address: ${addr}`);
-
-  // Force phone/email to show on the appointment even if Square UI doesn't surface customer fields
   if (customer.phone) notesParts.push(`Phone: ${customer.phone}`);
   if (customer.email) notesParts.push(`Email: ${customer.email}`);
 
-  const notes = notesParts.join(" | ");
+  const notes = notesParts.length ? notesParts.join(" | ") : "Booked via Kallr";
 
   // UPDATE PATH: if booking_id is provided, update existing booking instead of creating a duplicate
   if (booking_id) {
@@ -320,7 +247,6 @@ export async function POST(req: NextRequest) {
         booking_id,
         booking: put.json?.booking,
         updated: true,
-        ensured_customer_update,
       },
       { status: 200 }
     );
@@ -358,7 +284,6 @@ export async function POST(req: NextRequest) {
       booking_id: newId,
       booking: booking.data?.booking,
       updated: false,
-      ensured_customer_update,
     },
     { status: 200 }
   );
