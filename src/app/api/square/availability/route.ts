@@ -16,14 +16,97 @@ function jsonError(status: number, payload: any) {
   return NextResponse.json(payload, { status });
 }
 
+const DEFAULT_TIMEZONE = "America/New_York";
+
+// Keep it simple + predictable (so Vapi stops “thinking” too long)
+const DEFAULT_MAX_OPTIONS = 6;
+const DEFAULT_BUSINESS_START_HOUR = 9;  // 9 AM ET
+const DEFAULT_BUSINESS_END_HOUR = 18;   // 6 PM ET (end exclusive)
+
+type SlotOption = {
+  // what to BOOK
+  start_at_utc: string;
+  location_id: string;
+  appointment_segments: Array<{
+    duration_minutes: number;
+    team_member_id: string;
+    service_variation_id: string;
+    service_variation_version?: number;
+  }>;
+
+  // what to SPEAK
+  display_et: string;
+
+  // helpful extras
+  epoch_ms: number;
+  team_member_id: string;
+  duration_minutes: number;
+  service_variation_id: string;
+};
+
+function safeInt(v: any, fallback: number) {
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function toEtParts(date: Date, tz = DEFAULT_TIMEZONE) {
+  // Build both a readable “Monday, January 5th at 12:30 PM Eastern”
+  // and a numeric hour to filter business hours.
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  const parts = dtf.formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || "";
+
+  const weekday = get("weekday");
+  const month = get("month");
+  const day = get("day"); // numeric string
+  const hourStr = get("hour");
+  const minute = get("minute");
+  const dayPeriod = get("dayPeriod"); // AM/PM
+
+  const hour12 = safeInt(hourStr, 0);
+  let hour24 = hour12;
+  if (dayPeriod === "PM" && hour12 !== 12) hour24 = hour12 + 12;
+  if (dayPeriod === "AM" && hour12 === 12) hour24 = 0;
+
+  // simple ordinal for the day
+  const d = safeInt(day, 0);
+  const suffix =
+    d % 100 >= 11 && d % 100 <= 13
+      ? "th"
+      : d % 10 === 1
+      ? "st"
+      : d % 10 === 2
+      ? "nd"
+      : d % 10 === 3
+      ? "rd"
+      : "th";
+
+  const display = `${weekday}, ${month} ${d}${suffix} at ${hour12}:${minute} ${dayPeriod} Eastern`;
+
+  return { display, hour24 };
+}
+
 export async function GET() {
   return NextResponse.json(
     {
       ok: true,
       message:
-        "POST { service_variation_ids: [..] } to search Square availability. This endpoint searches the next 14 days, and if empty, automatically extends forward in 14-day windows up to 90 days ahead.",
+        "POST { service_variation_ids: [..] } to search Square availability. Returns SMALL options[] already converted to Eastern time. Use options[i].start_at_utc for booking.",
       expects: {
         service_variation_ids: ["<base_id>", "<addon_id_optional>"],
+        // optional knobs:
+        timezone: "America/New_York",
+        max_options: 6,
+        business_hours: { start_hour: 9, end_hour: 18 }, // Eastern hours
       },
     },
     { status: 200 }
@@ -59,6 +142,12 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const tz = typeof body?.timezone === "string" && body.timezone.trim() ? body.timezone.trim() : DEFAULT_TIMEZONE;
+  const maxOptions = Math.max(1, Math.min(10, safeInt(body?.max_options, DEFAULT_MAX_OPTIONS)));
+
+  const bhStart = Math.max(0, Math.min(23, safeInt(body?.business_hours?.start_hour, DEFAULT_BUSINESS_START_HOUR)));
+  const bhEnd = Math.max(0, Math.min(24, safeInt(body?.business_hours?.end_hour, DEFAULT_BUSINESS_END_HOUR)));
+
   // Always search from "now" forward (do NOT trust tool-provided dates).
   const now = new Date();
   const baseStart = new Date(now.getTime() + 5 * 60 * 1000); // +5 minutes buffer
@@ -68,7 +157,6 @@ export async function POST(req: NextRequest) {
   const maxEnd = new Date(baseStart.getTime() + MAX_DAYS_AHEAD * 24 * 60 * 60 * 1000);
 
   let attempt = 0;
-  let found: any = null;
   let lastError: any = null;
 
   while (true) {
@@ -131,44 +219,96 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    const av = json?.availabilities || [];
-    if (av.length > 0) {
-      found = {
-        ok: true,
-        debug_id,
-        square_trace_id,
-        meta: {
-          used_location_id: location_id,
-          used_start_at: start.toISOString(),
-          used_end_at: end.toISOString(),
-          used_service_variation_ids: ids,
-          attempt_window_index: attempt,
-        },
-        availability: {
-          availabilities: av,
-          errors: json?.errors || [],
-        },
-      };
-      break;
+    const av = Array.isArray(json?.availabilities) ? json.availabilities : [];
+
+    // Convert to SMALL options[] (ET display + business-hours filter)
+    const options: SlotOption[] = [];
+    for (const slot of av) {
+      const startUtc = typeof slot?.start_at === "string" ? slot.start_at : "";
+      if (!startUtc) continue;
+
+      const dt = new Date(startUtc);
+      if (isNaN(dt.getTime())) continue;
+
+      const et = toEtParts(dt, tz);
+
+      // business-hours filter (ET local clock)
+      // end is exclusive: [start, end)
+      if (!(et.hour24 >= bhStart && et.hour24 < bhEnd)) continue;
+
+      const seg = Array.isArray(slot?.appointment_segments) ? slot.appointment_segments[0] : null;
+      if (!seg) continue;
+
+      const duration = safeInt(seg?.duration_minutes, 0);
+      const tm = typeof seg?.team_member_id === "string" ? seg.team_member_id : "";
+      const sid = typeof seg?.service_variation_id === "string" ? seg.service_variation_id : "";
+
+      if (!duration || !tm || !sid) continue;
+
+      options.push({
+        start_at_utc: startUtc,
+        display_et: et.display,
+        epoch_ms: dt.getTime(),
+        location_id: slot.location_id || location_id,
+        appointment_segments: [
+          {
+            duration_minutes: duration,
+            team_member_id: tm,
+            service_variation_id: sid,
+            service_variation_version: seg?.service_variation_version,
+          },
+        ],
+        team_member_id: tm,
+        duration_minutes: duration,
+        service_variation_id: sid,
+      });
     }
 
+    options.sort((a, b) => a.epoch_ms - b.epoch_ms);
+
+    const trimmed = options.slice(0, maxOptions);
+
+    // If we found any *usable* options, return immediately.
+    if (trimmed.length > 0) {
+      return NextResponse.json(
+        {
+          ok: true,
+          debug_id,
+          square_trace_id,
+          timezone: tz,
+          business_hours: { start_hour: bhStart, end_hour: bhEnd },
+          meta: {
+            used_location_id: location_id,
+            used_start_at: start.toISOString(),
+            used_end_at: end.toISOString(),
+            used_service_variation_ids: ids,
+            attempt_window_index: attempt,
+            raw_availabilities_count: av.length,
+          },
+          options: trimmed,
+        },
+        { status: 200 }
+      );
+    }
+
+    // No usable options in this window; advance to next window.
     attempt += 1;
   }
 
-  if (found) return NextResponse.json(found, { status: 200 });
   if (lastError) return NextResponse.json(lastError, { status: 502 });
 
   return NextResponse.json(
     {
       ok: true,
       debug_id,
-      availability: { availabilities: [], errors: [] },
+      timezone: DEFAULT_TIMEZONE,
+      options: [],
       meta: {
         used_location_id: location_id,
         used_start_at: baseStart.toISOString(),
         used_end_at: maxEnd.toISOString(),
         used_service_variation_ids: ids,
-        note: `No availability found in the next ${MAX_DAYS_AHEAD} days.`,
+        note: `No availability found (or none within business hours) in the next ${MAX_DAYS_AHEAD} days.`,
       },
     },
     { status: 200 }
