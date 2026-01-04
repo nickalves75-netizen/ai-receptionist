@@ -20,8 +20,8 @@ const DEFAULT_TIMEZONE = "America/New_York";
 
 // Keep it simple + predictable (so Vapi stops “thinking” too long)
 const DEFAULT_MAX_OPTIONS = 6;
-const DEFAULT_BUSINESS_START_HOUR = 9;  // 9 AM ET
-const DEFAULT_BUSINESS_END_HOUR = 18;   // 6 PM ET (end exclusive)
+const DEFAULT_BUSINESS_START_HOUR = 9; // 9 AM ET
+const DEFAULT_BUSINESS_END_HOUR = 18; // 6 PM ET (end exclusive)
 
 type SlotOption = {
   // what to BOOK
@@ -50,8 +50,6 @@ function safeInt(v: any, fallback: number) {
 }
 
 function toEtParts(date: Date, tz = DEFAULT_TIMEZONE) {
-  // Build both a readable “Monday, January 5th at 12:30 PM Eastern”
-  // and a numeric hour to filter business hours.
   const dtf = new Intl.DateTimeFormat("en-US", {
     timeZone: tz,
     weekday: "long",
@@ -77,7 +75,6 @@ function toEtParts(date: Date, tz = DEFAULT_TIMEZONE) {
   if (dayPeriod === "PM" && hour12 !== 12) hour24 = hour12 + 12;
   if (dayPeriod === "AM" && hour12 === 12) hour24 = 0;
 
-  // simple ordinal for the day
   const d = safeInt(day, 0);
   const suffix =
     d % 100 >= 11 && d % 100 <= 13
@@ -103,10 +100,9 @@ export async function GET() {
         "POST { service_variation_ids: [..] } to search Square availability. Returns SMALL options[] already converted to Eastern time. Use options[i].start_at_utc for booking.",
       expects: {
         service_variation_ids: ["<base_id>", "<addon_id_optional>"],
-        // optional knobs:
         timezone: "America/New_York",
         max_options: 6,
-        business_hours: { start_hour: 9, end_hour: 18 }, // Eastern hours
+        business_hours: { start_hour: 9, end_hour: 18 },
       },
     },
     { status: 200 }
@@ -142,7 +138,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const tz = typeof body?.timezone === "string" && body.timezone.trim() ? body.timezone.trim() : DEFAULT_TIMEZONE;
+  const tz =
+    typeof body?.timezone === "string" && body.timezone.trim() ? body.timezone.trim() : DEFAULT_TIMEZONE;
+
   const maxOptions = Math.max(1, Math.min(10, safeInt(body?.max_options, DEFAULT_MAX_OPTIONS)));
 
   const bhStart = Math.max(0, Math.min(23, safeInt(body?.business_hours?.start_hour, DEFAULT_BUSINESS_START_HOUR)));
@@ -232,8 +230,7 @@ export async function POST(req: NextRequest) {
 
       const et = toEtParts(dt, tz);
 
-      // business-hours filter (ET local clock)
-      // end is exclusive: [start, end)
+      // business-hours filter (ET local clock) - end is exclusive [start, end)
       if (!(et.hour24 >= bhStart && et.hour24 < bhEnd)) continue;
 
       const seg = Array.isArray(slot?.appointment_segments) ? slot.appointment_segments[0] : null;
@@ -255,7 +252,8 @@ export async function POST(req: NextRequest) {
             duration_minutes: duration,
             team_member_id: tm,
             service_variation_id: sid,
-            service_variation_version: seg?.service_variation_version,
+            service_variation_version:
+              typeof seg?.service_variation_version === "number" ? seg.service_variation_version : undefined,
           },
         ],
         team_member_id: tm,
@@ -265,10 +263,8 @@ export async function POST(req: NextRequest) {
     }
 
     options.sort((a, b) => a.epoch_ms - b.epoch_ms);
-
     const trimmed = options.slice(0, maxOptions);
 
-    // If we found any *usable* options, return immediately.
     if (trimmed.length > 0) {
       return NextResponse.json(
         {
@@ -276,6 +272,7 @@ export async function POST(req: NextRequest) {
           debug_id,
           square_trace_id,
           timezone: tz,
+          max_options: maxOptions,
           business_hours: { start_hour: bhStart, end_hour: bhEnd },
           meta: {
             used_location_id: location_id,
@@ -291,7 +288,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // No usable options in this window; advance to next window.
     attempt += 1;
   }
 
@@ -301,7 +297,9 @@ export async function POST(req: NextRequest) {
     {
       ok: true,
       debug_id,
-      timezone: DEFAULT_TIMEZONE,
+      timezone: tz,
+      max_options: maxOptions,
+      business_hours: { start_hour: bhStart, end_hour: bhEnd },
       options: [],
       meta: {
         used_location_id: location_id,
