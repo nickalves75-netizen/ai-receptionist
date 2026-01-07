@@ -97,7 +97,7 @@ export default function SalesStudioPage() {
           <div className={styles.hero}>
             <div className={styles.heroLogo} aria-hidden="true">
               <Image
-                src="/kallr.png"
+                src="/neais-logo.png"
                 alt=""
                 width={92}
                 height={92}
