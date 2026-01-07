@@ -82,7 +82,7 @@ export default function Navbar() {
     <header className={`${styles.header} ${scrolled ? styles.scrolled : ""}`}>
       <div className={styles.inner}>
         <Link href="/" className={styles.brand} aria-label="Kallr Home" onClick={closeAll}>
-          <Image src="/kallr.png" alt="Kallr" width={120} height={34} priority className={styles.logo} />
+          <Image src="/public/neais-logo.png" alt="Kallr" width={120} height={34} priority className={styles.logo} />
         </Link>
 
         <nav className={styles.nav}>
