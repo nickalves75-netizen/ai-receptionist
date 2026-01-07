@@ -1,11 +1,11 @@
 :root{
-  --kallr-green:#0e7a64;
-  --kallr-navy:#0b1220;
-  --kallr-gray:#6b7280;
-  --kallr-bg:#ffffff;
-  --kallr-section:#f4f6f8;
-  --kallr-border:rgba(0,0,0,0.10);
-  --kallr-card:#f7e7b6;
+  --brand-green:#0e7a64;
+  --brand-navy:#0b1220;
+  --brand-gray:#6b7280;
+  --brand-bg:#ffffff;
+  --brand-section:#f4f6f8;
+  --brand-border:rgba(0,0,0,0.10);
+  --brand-card:#f7e7b6;
 }
 
 /* =========================
@@ -25,7 +25,7 @@
   line-height:1.04;
   margin:0;
   letter-spacing:-0.02em;
-  color:var(--kallr-navy);
+  color:var(--brand-navy);
 }
 
 /* =========================
@@ -52,14 +52,14 @@
   height:78vh;
 
   border-radius:18px;
-  border:1px solid var(--kallr-border);
-  background:var(--kallr-section);
+  border:1px solid var(--brand-border);
+  background:var(--brand-section);
 
   padding:12px;
 
   display:grid;
-  grid-template-rows:auto 1fr;   /* header + scroll body */
-  overflow:hidden;              /* clip inside viewport */
+  grid-template-rows:auto 1fr;
+  overflow:hidden;
 }
 
 /* Header */
@@ -74,7 +74,7 @@
 .colTitle{
   font-weight:950;
   letter-spacing:-0.01em;
-  color:var(--kallr-navy);
+  color:var(--brand-navy);
 }
 
 /* Count badge (top right) */
@@ -90,7 +90,7 @@
   place-items:center;
 
   font-weight:950;
-  color:var(--kallr-navy);
+  color:var(--brand-navy);
   flex:0 0 auto;
 }
 
@@ -99,8 +99,6 @@
   min-height:0;
   overflow-y:auto;
   overflow-x:hidden;
-
-  /* IMPORTANT: stop sizing from squishing cards */
   display:block;
 
   padding: 2px 6px 10px 2px;
@@ -120,12 +118,12 @@
 
 .colScroll::before{
   top:0;
-  background:linear-gradient(to bottom, var(--kallr-section), rgba(244,246,248,0));
+  background:linear-gradient(to bottom, var(--brand-section), rgba(244,246,248,0));
 }
 
 .colScroll::after{
   bottom:0;
-  background:linear-gradient(to top, var(--kallr-section), rgba(244,246,248,0));
+  background:linear-gradient(to top, var(--brand-section), rgba(244,246,248,0));
 }
 
 /* Scrollbar */
@@ -149,7 +147,7 @@
 ========================= */
 .card{
   border-radius:16px;
-  border:1px solid var(--kallr-border);
+  border:1px solid var(--brand-border);
   background:rgba(255,255,255,0.88);
   overflow:hidden;
 
@@ -169,7 +167,7 @@
   border:none;
   width:100%;
   text-align:left;
-  background:var(--kallr-green);
+  background:var(--brand-green);
   color:#fff;
   cursor:pointer;
 
@@ -205,7 +203,7 @@
 
 .rowValue{
   font-weight:950;
-  color:var(--kallr-navy);
+  color:var(--brand-navy);
   overflow-wrap:anywhere;
 }
 
@@ -215,7 +213,7 @@
   margin:10px 0;
 }
 
-/* Expand animation (0fr -> 1fr) pushes cards below cleanly */
+/* Expand animation */
 .expandWrap{
   display:grid;
   grid-template-rows:0fr;
@@ -250,8 +248,10 @@
 }
 
 .viewMoreText{
-  font-weight:950;
-  color:rgba(11,18,32,0.80);
+  font-weight: 850;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: rgba(11,18,32,0.78);
 }
 
 .chev{
@@ -303,7 +303,7 @@
 
 .modalTitle{
   font-weight: 950;
-  color: var(--kallr-navy);
+  color: var(--brand-navy);
   letter-spacing: -0.01em;
   font-size: 16px;
 }
@@ -316,7 +316,7 @@
 }
 
 .modalStrong{
-  color: var(--kallr-navy);
+  color: var(--brand-navy);
   font-weight: 950;
 }
 
@@ -333,7 +333,7 @@
   padding: 0 14px;
   border-radius: 999px;
   border: 1px solid rgba(0,0,0,0.10);
-  background: var(--kallr-green);
+  background: var(--brand-green);
   color: #fff;
   font-weight: 950;
   cursor: pointer;
@@ -394,10 +394,18 @@
   height:18px;
 }
 
-/* smoother View more */
-.viewMoreText{
+/* lightweight error toast */
+.toastErr{
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 1100;
+  max-width: min(520px, 92vw);
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 18px 50px rgba(0,0,0,0.18);
+  padding: 10px 12px;
   font-weight: 850;
-  font-size: 14px;
-  letter-spacing: -0.01em;
-  color: rgba(11,18,32,0.78);
+  color: rgba(11,18,32,0.85);
 }

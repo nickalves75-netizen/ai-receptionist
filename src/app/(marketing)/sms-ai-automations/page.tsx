@@ -4,12 +4,11 @@ import styles from "@/app/(marketing)/page.module.css";
 export default function SmsAiAutomationsPage() {
   return (
     <MarketingLanding
-      pill="Text-back + nurture + reminders"
+      pill="AI for Messages"
       sourcePrefix="sms"
       title={
         <>
-          <span className={styles.accent}>AI SMS Automations</span> That Convert Missed Calls Into
-          Booked Revenue
+          <span className={styles.accent}>AI for Messages</span> That Converts Missed Calls Into Booked Revenue
         </>
       }
       subhead="Instant text workflows that follow up, qualify, and schedule—so leads don’t go cold."

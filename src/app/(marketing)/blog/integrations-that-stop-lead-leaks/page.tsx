@@ -11,7 +11,8 @@ export default function BlogPost() {
             <div className={styles.pill}>Blog • Dec 2024 • 7 min read</div>
             <h1 className={styles.h1}>The 5 Integrations That Stop Lead Leaks Overnight</h1>
             <p className={styles.subhead}>
-              You don’t need more tools—you need your tools to talk to each other. These 5 connections eliminate the biggest leaks fast.
+              You don’t need more tools—you need your tools to talk to each other. These five connections eliminate the most common
+              leaks fast and keep leads moving toward a booked next step.
             </p>
 
             <div style={{ marginTop: 14 }}>
@@ -30,11 +31,21 @@ export default function BlogPost() {
           <div className={styles.panel}>
             <h3 className={styles.panelTitle}>The 5 integrations</h3>
             <ul className={styles.checkList}>
-              <li><b>Calendar booking:</b> book the next step on first touch</li>
-              <li><b>CRM / pipeline:</b> every lead has a home and a status</li>
-              <li><b>Form → SMS follow-up:</b> confirm + qualify instantly</li>
-              <li><b>Internal alerts:</b> route urgent leads to the right person</li>
-              <li><b>Outcome reporting:</b> track booked results, not pageviews</li>
+              <li>
+                <b>Calendar booking:</b> schedule the next step on first touch
+              </li>
+              <li>
+                <b>CRM / pipeline:</b> every lead has a home, owner, and status
+              </li>
+              <li>
+                <b>Form → SMS follow-up:</b> confirm and qualify instantly
+              </li>
+              <li>
+                <b>Internal alerts:</b> route urgent leads to the right person
+              </li>
+              <li>
+                <b>Outcome reporting:</b> track booked results, not pageviews
+              </li>
             </ul>
 
             <div className={styles.panelFoot}>

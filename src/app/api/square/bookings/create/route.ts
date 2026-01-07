@@ -10,9 +10,12 @@ function deny(msg: string) {
 function requireSecret(req: NextRequest) {
   const expected = process.env.VAPI_TOOL_SECRET;
   if (!expected) return true; // allow if unset (not recommended)
+
   const got =
+    req.headers.get("x-neais-secret") ||
     req.headers.get("x-kallr-secret") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
   return got === expected;
 }
 
@@ -44,8 +47,7 @@ async function squareFetch(token: string, path: string, init?: RequestInit) {
     },
   });
 
-  const square_trace_id =
-    res.headers.get("square-trace-id") || res.headers.get("x-request-id") || undefined;
+  const square_trace_id = res.headers.get("square-trace-id") || res.headers.get("x-request-id") || undefined;
 
   let json: any = null;
   try {
@@ -185,7 +187,7 @@ export async function POST(req: NextRequest) {
   if (customer.phone) notesParts.push(`Phone: ${customer.phone}`);
   if (customer.email) notesParts.push(`Email: ${customer.email}`);
 
-  const notes = notesParts.length ? notesParts.join(" | ") : "Booked via Kallr";
+  const notes = notesParts.length ? notesParts.join(" | ") : "Booked via NEAIS";
 
   // UPDATE PATH: if booking_id is provided, update existing booking instead of creating a duplicate
   if (booking_id) {

@@ -1,5 +1,5 @@
 // src/app/api/square/book-from-keys/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
@@ -10,6 +10,19 @@ function getSupabaseUrl() {
 
 function asArray(v: any): any[] {
   return Array.isArray(v) ? v : [];
+}
+
+function requireSecret(req: NextRequest) {
+  // Optional hardening (enable by setting either env var)
+  const expected = process.env.BOOK_FROM_KEYS_SECRET || process.env.VAPI_TOOL_SECRET;
+  if (!expected) return true;
+
+  const got =
+    req.headers.get("x-neais-secret") ||
+    req.headers.get("x-kallr-secret") ||
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
+  return got === expected;
 }
 
 type Body = {
@@ -42,11 +55,15 @@ type Body = {
 };
 
 function safeUUID() {
-  return (globalThis as any)?.crypto?.randomUUID?.() || `kallr_${Date.now()}_${Math.random()}`;
+  return (globalThis as any)?.crypto?.randomUUID?.() || `neais_${Date.now()}_${Math.random()}`;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    if (!requireSecret(req)) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = (await req.json().catch(() => null)) as Body | null;
 
     if (
@@ -145,10 +162,7 @@ export async function POST(req: Request) {
 
     const availJson = await availRes.json().catch(() => ({}));
     if (!availRes.ok) {
-      return NextResponse.json(
-        { ok: false, error: "Square availability failed", details: availJson },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: "Square availability failed", details: availJson }, { status: 500 });
     }
 
     const slots: any[] = Array.isArray((availJson as any)?.availabilities) ? (availJson as any).availabilities : [];

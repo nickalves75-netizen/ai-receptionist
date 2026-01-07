@@ -13,7 +13,7 @@ function withCors(req: NextRequest, res: Response) {
   headers.set("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   headers.set(
     "Access-Control-Allow-Headers",
-    "content-type, x-kallr-webhook-secret, x-vapi-webhook-secret"
+    "content-type, x-kallr-webhook-secret, x-neais-webhook-secret, x-vapi-webhook-secret"
   );
   headers.set("Access-Control-Max-Age", "86400");
 
@@ -42,6 +42,7 @@ function authorized(req: NextRequest) {
   if (!secret) return true; // allow if not configured (dev), but set it for prod
 
   const headerSecret =
+    req.headers.get("x-neais-webhook-secret") ||
     req.headers.get("x-kallr-webhook-secret") ||
     req.headers.get("x-vapi-webhook-secret") ||
     "";
@@ -157,14 +158,11 @@ export async function POST(req: NextRequest) {
   const toNumber: string | null =
     msg?.phoneNumber?.number ?? call?.phoneNumber?.number ?? call?.to ?? body?.to ?? null;
 
-  const fromNumber: string | null =
-    call?.customer?.number ?? msg?.customer?.number ?? body?.from ?? null;
+  const fromNumber: string | null = call?.customer?.number ?? msg?.customer?.number ?? body?.from ?? null;
 
-  const startedAt: string | null =
-    call?.startedAt ?? msg?.startedAt ?? body?.startedAt ?? call?.createdAt ?? null;
+  const startedAt: string | null = call?.startedAt ?? msg?.startedAt ?? body?.startedAt ?? call?.createdAt ?? null;
 
-  const endedAt: string | null =
-    call?.endedAt ?? msg?.endedAt ?? body?.endedAt ?? null;
+  const endedAt: string | null = call?.endedAt ?? msg?.endedAt ?? body?.endedAt ?? null;
 
   const artifact = msg?.artifact ?? call?.artifact ?? null;
   const transcriptRaw = artifact?.transcript ?? call?.transcript ?? msg?.transcript ?? null;

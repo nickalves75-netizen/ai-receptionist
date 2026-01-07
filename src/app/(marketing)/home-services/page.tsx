@@ -8,8 +8,7 @@ export default function HomeServicesPage() {
       sourcePrefix="industry-home-services"
       title={
         <>
-          AI Integration for <span className={styles.accent}>Home Services</span> That Captures Leads
-          & Handles the Phones
+          <span className={styles.accent}>AI for Calls + Messages</span> for Home Services That Captures Leads
         </>
       }
       subhead="Answer every call, qualify service requests, and route bookings instantly—without adding office headcount."
@@ -17,7 +16,7 @@ export default function HomeServicesPage() {
         persona: "male",
         kicker: "24/7 answering for booked jobs",
         title: "Never Miss Another Service Call",
-        body: "Kallr answers fast, collects the right job details, and routes the next step—so your team stays focused on the field while your calendar stays full.",
+        body: "NEAIS answers fast, collects the right job details, and routes the next step—so your team stays focused on the field while your calendar stays full.",
       }}
     />
   );

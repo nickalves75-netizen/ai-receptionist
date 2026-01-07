@@ -487,7 +487,7 @@ export default function ProposalWizardPage() {
 
       <header className={styles.header}>
         <div className={styles.brand}>
-          <Image src="/kallr.png" alt="Kallr" width={58} height={58} className={styles.brandLogo} />
+          <Image src="/neais-logo.png" alt="Kallr" width={58} height={58} className={styles.brandLogo} />
           <div className={styles.brandTitle}>Sales Studio</div>
         </div>
 

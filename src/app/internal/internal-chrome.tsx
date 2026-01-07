@@ -49,7 +49,6 @@ export default function InternalChrome({ children }: { children: React.ReactNode
 
   // Close dropdown on outside click
   useEffect(() => {
-    // If we're on login, we don't need this listener
     if (isLogin) return;
 
     function onDown(e: MouseEvent) {
@@ -125,7 +124,7 @@ export default function InternalChrome({ children }: { children: React.ReactNode
       <aside className={s.sidebar}>
         <div className={s.brandRow}>
           <div className={s.brandIcon}>
-            <Image src="/neais-logo.png" alt="Kallr" width={40} height={40} />
+            <Image src="/neais-logo.png" alt="NEAIS" width={40} height={40} />
           </div>
           <div className={s.brandText}>
             <div className={s.brandTitle}>Internal</div>

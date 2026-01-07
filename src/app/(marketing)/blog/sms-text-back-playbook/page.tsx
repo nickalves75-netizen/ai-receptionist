@@ -11,7 +11,7 @@ export default function BlogPost() {
             <div className={styles.pill}>Blog • Dec 2024 • 7 min read</div>
             <h1 className={styles.h1}>The SMS Text-Back Playbook That Books More Appointments</h1>
             <p className={styles.subhead}>
-              SMS is the simplest automation that produces real bookings—because it meets customers where they already are.
+              SMS is one of the simplest automations that produces real bookings—because it meets customers where they already are.
               The trick is timing, tone, and a clean next step.
             </p>
 
@@ -31,8 +31,8 @@ export default function BlogPost() {
           <div className={styles.panel}>
             <h3 className={styles.panelTitle}>Start with missed calls (highest ROI)</h3>
             <p className={styles.sectionSub} style={{ textAlign: "left" }}>
-              Missed call → instant text-back turns a dead end into an open loop.
-              It makes you look responsive—even after hours.
+              Missed call → instant text-back turns a dead end into an open loop. It makes you look responsive—even after hours—and
+              keeps the customer engaged while they’re still in “decision mode.”
             </p>
             <ul className={styles.checkList}>
               <li>Send within 15–30 seconds</li>
@@ -40,14 +40,18 @@ export default function BlogPost() {
               <li>Ask one question</li>
             </ul>
 
-            <h3 className={styles.panelTitle} style={{ marginTop: 18 }}>Templates that feel human</h3>
+            <h3 className={styles.panelTitle} style={{ marginTop: 18 }}>
+              Templates that feel human
+            </h3>
             <ul className={styles.checkList}>
-              <li>“Hey — this is Kallr with [Business Name]. Just saw your call. What can we help with?”</li>
+              <li>“Hey — this is the AI assistant for [Business Name]. Just saw your call. What can we help with?”</li>
               <li>“Quick question: is this for today, or a different day?”</li>
               <li>“Want to book a time, or get a quick quote first?”</li>
             </ul>
 
-            <h3 className={styles.panelTitle} style={{ marginTop: 18 }}>The 2-step follow-up (no spam)</h3>
+            <h3 className={styles.panelTitle} style={{ marginTop: 18 }}>
+              The 2-step follow-up (no spam)
+            </h3>
             <ul className={styles.checkList}>
               <li>Later same day: “Still need help with this?”</li>
               <li>Next day: “Want me to hold a spot for you this week?”</li>
@@ -55,8 +59,8 @@ export default function BlogPost() {
             </ul>
 
             <div className={styles.panelFoot}>
-              <span className={styles.panelFootStrong}>Takeaway:</span> SMS isn’t about volume. It’s about timing + tone.
-              Short, human, and action-oriented wins.
+              <span className={styles.panelFootStrong}>Takeaway:</span> SMS isn’t about volume. It’s about timing + tone. Short,
+              human, and action-oriented wins.
             </div>
           </div>
         </div>

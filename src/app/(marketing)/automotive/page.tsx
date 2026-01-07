@@ -8,16 +8,16 @@ export default function AutomotivePage() {
       sourcePrefix="industry-automotive"
       title={
         <>
-          AI Integration for <span className={styles.accent}>Automotive</span> That Converts Leads
-          Into Solid Appointments
+          AI Systems for <span className={styles.accent}>Automotive</span> That Turn Leads Into Booked Work
         </>
       }
-      subhead="Handle quotes, availability, and intake questions instantly—then book or route the right next step."
+      subhead="Answer calls and texts instantly, capture vehicle details, and route the next step—quote, schedule, or callback—without slowing the shop down."
       persona={{
         persona: "female",
-        kicker: "Human-sounding intake + fast routing",
-        title: "A Better Front Desk Without the Wait",
-        body: "Kallr captures vehicle details, service needs, and urgency—then routes calls and texts follow-ups automatically so your team can stay on the floor.",
+        kicker: "Fast intake + smart routing",
+        title: "A Better Front Desk for Busy Shops",
+        body:
+          "NEAIS handles first-contact for calls and messages, gathers the essentials (vehicle, service, timing), and pushes clean notes to your team—so techs stay productive and customers feel taken care of.",
       }}
     />
   );

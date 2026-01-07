@@ -8,13 +8,14 @@ function getEnv(name: string) {
   return v;
 }
 
+function getPublicUrlEnv() {
+  // Back-compat: prefer NEAIS_PUBLIC_URL, fallback to KALLR_PUBLIC_URL
+  return process.env.NEAIS_PUBLIC_URL || process.env.KALLR_PUBLIC_URL || "";
+}
+
 function b64url(input: Buffer | string) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
-  return buf
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function normalizeBaseUrl(url: string) {
@@ -44,10 +45,10 @@ export async function GET(req: Request) {
   const redirectTo = url.searchParams.get("redirect_to") || "/internal";
 
   const appId = getEnv("SQUARE_APPLICATION_ID");
-  const kallrBase = normalizeBaseUrl(getEnv("KALLR_PUBLIC_URL"));
+  const base = normalizeBaseUrl(getPublicUrlEnv() || url.origin);
   const stateSecret = getEnv("SQUARE_STATE_SECRET");
 
-  const redirectUri = `${kallrBase}/api/square/oauth/callback`;
+  const redirectUri = `${base}/api/square/oauth/callback`;
 
   // Start minimal. You can expand scopes later.
   const scopes = [
@@ -66,6 +67,7 @@ export async function GET(req: Request) {
   authUrl.searchParams.set("scope", scopes);
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("session", "false"); // recommended for production
+  authUrl.searchParams.set("redirect_uri", redirectUri);
 
   return NextResponse.redirect(authUrl.toString());
 }

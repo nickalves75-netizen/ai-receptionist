@@ -4,12 +4,11 @@ import styles from "@/app/(marketing)/page.module.css";
 export default function AiPhoneReceptionistPage() {
   return (
     <MarketingLanding
-      pill="AI Phone Receptionist + Local SEO"
+      pill="AI for Calls"
       sourcePrefix="ai-phone"
       title={
         <>
-          <span className={styles.accent}>AI Phone Receptionist</span> That Captures Leads & Books
-          Appointments 24/7
+          <span className={styles.accent}>AI for Calls</span> that Answers, Qualifies, and Books 24/7
         </>
       }
     />

@@ -1,3 +1,4 @@
+// src/app/internal/sales-studio/page.tsx
 "use client";
 
 import Image from "next/image";
@@ -96,14 +97,7 @@ export default function SalesStudioPage() {
         <header className={styles.header}>
           <div className={styles.hero}>
             <div className={styles.heroLogo} aria-hidden="true">
-              <Image
-                src="/neais-logo.png"
-                alt=""
-                width={92}
-                height={92}
-                priority
-                className={styles.logo}
-              />
+              <Image src="/neais-logo.png" alt="NEAIS" width={92} height={92} priority className={styles.logo} />
             </div>
             <h1 className={styles.h1}>Sales Studio</h1>
           </div>
@@ -157,7 +151,7 @@ export default function SalesStudioPage() {
 
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="repName">
-                  Kallr representative <span className={styles.req}>*</span>
+                  NEAIS representative <span className={styles.req}>*</span>
                 </label>
                 <input
                   id="repName"
@@ -218,9 +212,7 @@ export default function SalesStudioPage() {
               </div>
 
               <div
-                className={`${styles.field} ${styles.reveal} ${
-                  needsReferralName ? styles.revealOn : styles.revealOff
-                }`}
+                className={`${styles.field} ${styles.reveal} ${needsReferralName ? styles.revealOn : styles.revealOff}`}
                 aria-hidden={!needsReferralName}
               >
                 <label className={styles.label} htmlFor="referralName">
@@ -241,11 +233,7 @@ export default function SalesStudioPage() {
                 {submitErr ? <div className={styles.err}>{submitErr}</div> : null}
 
                 <div className={styles.btnWrap}>
-                  <button
-                    type="submit"
-                    className={styles.btnPrimary}
-                    disabled={!canSubmit || submitting}
-                  >
+                  <button type="submit" className={styles.btnPrimary} disabled={!canSubmit || submitting}>
                     {submitting ? "Starting..." : "Start New Proposal"}
                   </button>
                 </div>

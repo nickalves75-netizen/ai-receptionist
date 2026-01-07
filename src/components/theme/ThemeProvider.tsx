@@ -24,7 +24,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // 1) localStorage wins
-    const saved = window.localStorage.getItem("kallr_theme") as Theme | null;
+    const saved = window.localStorage.getItem("neais_theme") as Theme | null;
     const initial = saved ?? getSystemTheme();
     setThemeState(initial);
   }, []);
@@ -34,7 +34,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.dataset.theme = theme;
     // helps form controls/scrollbars etc
     (document.documentElement.style as any).colorScheme = theme;
-    window.localStorage.setItem("kallr_theme", theme);
+    window.localStorage.setItem("neais_theme", theme);
   }, [theme]);
 
   const api = useMemo<ThemeCtx>(

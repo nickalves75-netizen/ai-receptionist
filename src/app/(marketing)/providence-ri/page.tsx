@@ -8,16 +8,15 @@ export default function ProvidenceRiPage() {
       sourcePrefix="loc-providence-ri"
       title={
         <>
-          AI Receptionist in <span className={styles.accent}>Providence, RI</span> That Converts Calls
-          Into Booked Revenue
+          <span className={styles.accent}>AI for Calls</span> in Providence, RI that Turns Inquiries Into Booked Revenue
         </>
       }
-      subhead="Answer every call, qualify quickly, and keep prospects warm with automated follow-ups."
+      subhead="Answer every call, qualify quickly, and keep prospects warm with automated message follow-up."
       persona={{
         persona: "male",
         kicker: "24/7 coverage for local businesses",
         title: "A Faster Front Desk for Providence",
-        body: "Kallr captures intent, asks the right questions, and routes bookings or follow-ups automatically—so you don’t lose leads after hours.",
+        body: "NEAIS captures intent, asks the right questions, and routes bookings or follow-ups automatically—so you don’t lose leads after hours.",
       }}
     />
   );

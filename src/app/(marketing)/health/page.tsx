@@ -8,15 +8,15 @@ export default function HealthPage() {
       sourcePrefix="industry-health"
       title={
         <>
-          AI Integration for <span className={styles.accent}>Health & Wellness</span> That Makes Booking More Seamless
+          AI Systems for <span className={styles.accent}>Health & Wellness</span> That Make Booking Seamless
         </>
       }
-      subhead="Capture inquiries, qualify needs, and book the next step—while maintaining a calm, professional experience."
+      subhead="Answer inquiries, qualify needs, and book the next step—while maintaining a calm, professional experience."
       persona={{
         persona: "male",
         kicker: "Fast scheduling + consistent intake",
         title: "Patients Get Answers Immediately",
-        body: "Kallr responds instantly, collects the right intake notes, and routes appointments or follow-ups—so you protect the patient experience and reduce missed opportunities.",
+        body: "NEAIS responds instantly, collects the right intake notes, and routes appointments or follow-ups—so you protect the patient experience and reduce missed opportunities.",
       }}
     />
   );

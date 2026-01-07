@@ -15,7 +15,7 @@ function applySecurityHeaders(res: NextResponse) {
 }
 
 function emailAllowlisted(user: any): boolean {
-  const allow = (process.env.KALLR_STAFF_EMAILS ?? process.env.NEXT_PUBLIC_KALLR_STAFF_EMAILS ?? "")
+  const allow = (process.env.NEAIS_STAFF_EMAILS ?? process.env.NEXT_PUBLIC_NEAIS_STAFF_EMAILS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);

@@ -8,8 +8,7 @@ export default function EducationPage() {
       sourcePrefix="industry-education"
       title={
         <>
-          AI Integration for <span className={styles.accent}>Education & Training </span> That Automates Your Intake &
-          Scheduling
+          AI Systems for <span className={styles.accent}>Education & Training</span> That Automate Intake & Scheduling
         </>
       }
       subhead="Answer program questions, capture lead details, and route enrollments with a consistent process—24/7."
@@ -17,7 +16,7 @@ export default function EducationPage() {
         persona: "female",
         kicker: "Enrollments move faster",
         title: "Consistent Follow-Up That Keeps Leads Warm",
-        body: "Kallr answers common questions, collects the right details, and triggers follow-up texts so prospective students don’t slip away.",
+        body: "NEAIS answers common questions, collects the right details, and triggers message follow-up so prospective students don’t slip away.",
       }}
     />
   );

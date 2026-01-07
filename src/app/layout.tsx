@@ -10,7 +10,7 @@ const space = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Kallr",
+  title: "NEAIS",
   description: "AI that works your phones — so your team doesn’t have to.",
 };
 
@@ -32,8 +32,8 @@ export default function RootLayout({
         <style>{`
           :root{
             /* Palette (your core identity) */
-            --kallr-core: #147f6a;
-            --kallr-accent: #1dbd88;
+            --NEAIS-core: #e71212ff;
+            --NEAIS-accent: #1d20bdff;
 
             /* Text + neutrals */
             --ink: #181f2d;
@@ -69,8 +69,8 @@ export default function RootLayout({
             font-weight: 700;
             font-size: 14px;
             color: #fff;
-            background: linear-gradient(180deg, rgba(29,189,136,1), rgba(20,127,106,1));
-            border: 1px solid rgba(20,127,106,0.22);
+            background: linear-gradient(180deg, rgba(32, 29, 189, 1), rgba(127, 20, 20, 1));
+            border: 1px solid rgba(1, 9, 22, 0.22);
             box-shadow: var(--shadow-green);
             transition: transform 140ms ease, filter 140ms ease;
             cursor: pointer;
@@ -113,8 +113,8 @@ export default function RootLayout({
           }
           .field::placeholder{ color: rgba(24,31,45,0.45); font-weight: 500; }
           .field:focus{
-            border-color: rgba(29,189,136,0.55);
-            box-shadow: 0 0 0 4px rgba(29,189,136,0.16), 0 14px 34px rgba(24,31,45,0.08);
+            border-color: rgba(189, 29, 29, 0.55);
+            box-shadow: 0 0 0 4px rgba(29, 40, 189, 0.16), 0 14px 34px rgba(35, 92, 206, 0.08);
           }
 
           .label{

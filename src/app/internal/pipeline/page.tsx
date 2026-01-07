@@ -6,15 +6,24 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 import { createSupabaseAdmin } from "@/lib/supabase/admin";
 import PipelineClient from "./pipelineClient";
 
-function isStaff(user: any): boolean {
-  const role = user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role ?? "";
-  if (typeof role === "string" && ["staff", "admin", "kallr"].includes(role.toLowerCase())) return true;
+const STAFF_ROLES = ["staff", "admin", "neais", "kallr"];
 
-  const allow = (process.env.KALLR_STAFF_EMAILS ?? "")
+function staffAllowList(): string[] {
+  const raw =
+    process.env.NEAIS_STAFF_EMAILS ??
+    process.env.KALLR_STAFF_EMAILS ??
+    "";
+  return raw
     .split(",")
     .map((x) => x.trim().toLowerCase())
     .filter(Boolean);
+}
 
+function isStaff(user: any): boolean {
+  const role = user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role ?? "";
+  if (typeof role === "string" && STAFF_ROLES.includes(role.toLowerCase())) return true;
+
+  const allow = staffAllowList();
   const email = (user?.email ?? "").toLowerCase();
   if (allow.length && email && allow.includes(email)) return true;
 
@@ -118,7 +127,7 @@ export default async function PipelinePage() {
     if (error) throw new Error(error.message);
   }
 
-    // ✅ Read using admin client so internal staff can see everything (RLS-proof)
+  // ✅ Read using admin client so internal staff can see everything (RLS-proof)
   const admin = createSupabaseAdmin();
 
   const { data: leadsRaw, error: leadsErr } = await admin
@@ -130,7 +139,6 @@ export default async function PipelinePage() {
     .limit(2000);
 
   if (leadsErr) throw new Error(leadsErr.message);
-
 
   const leads = (leadsRaw ?? []).map((l: any) => {
     const st = safe(l.stage || "new").toLowerCase().replace(/\s+/g, "_");

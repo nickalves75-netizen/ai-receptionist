@@ -31,7 +31,7 @@ const quotes = [
     title: "General Manager",
     company: "Capitol Contractors Group",
     quote:
-      "We didn’t change anything else—just added Kallr. Within a couple weeks we could literally see the difference in our schedule. Less chaos, better handoffs.",
+      "We didn’t change anything else—just added NEAIS. Within a couple weeks we could literally see the difference in our schedule. Less chaos, better handoffs.",
     stat: "+220%",
     statLabel: "lead capture",
     highlights: ["Better handoffs", "More booked jobs", "Less chaos"],
@@ -46,9 +46,7 @@ export default function QuotesPage() {
         className={styles.hero}
         style={{
           backgroundImage:
-  "linear-gradient(180deg, var(--k-hero-a), var(--k-hero-b)), url('/neais-logo.png')",
-
-
+            "linear-gradient(180deg, var(--k-hero-a), var(--k-hero-b)), url('/brand/neais-logo-800w.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
@@ -60,7 +58,7 @@ export default function QuotesPage() {
               <div className={styles.pill}>Quotes</div>
 
               <h1 className={styles.h1}>
-                Quick Notes From Teams <span className={styles.accent}>Using Kallr</span>
+                Quick Notes From Teams <span className={styles.accent}>Using NEAIS</span>
               </h1>
 
               <p className={styles.subhead}>
@@ -91,17 +89,13 @@ export default function QuotesPage() {
             <p className={styles.sectionSub}>Short, honest feedback—no case-study energy.</p>
           </Reveal>
 
-          <div
-            className={styles.grid4}
-            style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" as any }}
-          >
+          <div className={styles.grid4} style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" as any }}>
             {quotes.map((q, idx) => (
               <Reveal
                 key={q.location}
                 as="div"
                 delayMs={90 + idx * 70}
                 className={styles.card}
-                // allows bottom-right stat badge positioning without touching CSS files
                 style={{ position: "relative" } as any}
               >
                 <div className={styles.pill} style={{ width: "fit-content", marginBottom: 10 }}>
@@ -113,8 +107,7 @@ export default function QuotesPage() {
                 </p>
 
                 <p className={styles.cardText} style={{ textAlign: "center", marginTop: 10 }}>
-                  <strong>{q.name}</strong> • {q.title} •{" "}
-                  <span className={styles.accent}>{q.company}</span>
+                  <strong>{q.name}</strong> • {q.title} • <span className={styles.accent}>{q.company}</span>
                 </p>
 
                 <ul className={styles.list} style={{ marginTop: 10 }}>
@@ -132,20 +125,15 @@ export default function QuotesPage() {
                     padding: "10px 12px",
                     borderRadius: 14,
                     background: "var(--k-card)",
-border: "1px solid var(--k-border)",
-boxShadow: "var(--k-shadow2)",
-color: "var(--k-text)",
-
+                    border: "1px solid var(--k-border)",
+                    boxShadow: "var(--k-shadow2)",
+                    color: "var(--k-text)",
                     textAlign: "right",
                     minWidth: 110,
                   }}
                 >
-                  <div style={{ fontWeight: 900, fontSize: 16, lineHeight: 1.1 }}>
-                    {q.stat}
-                  </div>
-                  <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>
-                    {q.statLabel}
-                  </div>
+                  <div style={{ fontWeight: 900, fontSize: 16, lineHeight: 1.1 }}>{q.stat}</div>
+                  <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 700 }}>{q.statLabel}</div>
                 </div>
 
                 <LeadCtaButton className={styles.cardBtn} source={`quotes-${q.location}`}>
@@ -165,8 +153,7 @@ color: "var(--k-text)",
           <Reveal as="div" delayMs={80} className={styles.ctaCard}>
             <h2 className={styles.ctaTitle}>Want a similar outcome?</h2>
             <p className={styles.ctaText}>
-              Run the Kallr assessment—then we’ll map the cleanest path to better calls, better follow-up,
-              and more bookings.
+              Run the NEAIS assessment—then we’ll map the cleanest path to better calls, better follow-up, and more bookings.
             </p>
 
             <div className={styles.ctaRow}>

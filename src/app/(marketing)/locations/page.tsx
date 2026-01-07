@@ -16,7 +16,7 @@ export default function LocationsPage() {
             </h1>
 
             <p className={styles.subhead}>
-              We can deploy Kallr anywhere—this page is for SEO + local relevance by market.
+              NEAIS can deploy nationwide—this page is built for local relevance and market-specific search.
             </p>
 
             <div className={styles.heroCtas}>

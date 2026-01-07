@@ -7,11 +7,7 @@ export const runtime = "nodejs";
 
 function b64url(input: Buffer | string) {
   const buf = Buffer.isBuffer(input) ? input : Buffer.from(input, "utf8");
-  return buf
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "");
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function timingSafeEqual(a: string, b: string) {
@@ -35,6 +31,10 @@ function getSupabaseUrl() {
   return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 }
 
+function getPublicUrlEnv(fallback: string) {
+  return normalizeBaseUrl(process.env.NEAIS_PUBLIC_URL || process.env.KALLR_PUBLIC_URL || fallback);
+}
+
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -42,10 +42,7 @@ export async function GET(req: Request) {
     const oauthError = url.searchParams.get("error");
     const oauthErrorDesc = url.searchParams.get("error_description") || "";
     if (oauthError) {
-      return NextResponse.json(
-        { ok: false, error: oauthError, description: oauthErrorDesc },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: oauthError, description: oauthErrorDesc }, { status: 400 });
     }
 
     const code = url.searchParams.get("code");
@@ -84,7 +81,7 @@ export async function GET(req: Request) {
 
     // ✅ Use actual request origin so redirect_uri matches Square exactly (www vs non-www)
     const origin = url.origin;
-    const kallrBase = normalizeBaseUrl(process.env.KALLR_PUBLIC_URL ? normalizeBaseUrl(process.env.KALLR_PUBLIC_URL) : origin);
+    const publicBase = getPublicUrlEnv(origin);
     const redirectUri = `${origin}/api/square/oauth/callback`;
 
     // --- Exchange code for tokens (Square ObtainToken) ---
@@ -106,10 +103,7 @@ export async function GET(req: Request) {
     const tokenJson = await tokenRes.json().catch(() => ({}));
 
     if (!tokenRes.ok) {
-      return NextResponse.json(
-        { ok: false, error: "Square token exchange failed", details: tokenJson },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: "Square token exchange failed", details: tokenJson }, { status: 500 });
     }
 
     const accessToken = (tokenJson as any)?.access_token as string | undefined;
@@ -165,18 +159,12 @@ export async function GET(req: Request) {
       );
 
     if (upsertErr) {
-      return NextResponse.json(
-        { ok: false, error: "Failed saving Square credentials", details: upsertErr },
-        { status: 500 }
-      );
+      return NextResponse.json({ ok: false, error: "Failed saving Square credentials", details: upsertErr }, { status: 500 });
     }
 
-    return NextResponse.redirect(new URL(redirectTo, kallrBase));
+    return NextResponse.redirect(new URL(redirectTo, publicBase));
   } catch (e: any) {
     console.error("square oauth callback crashed:", e);
-    return NextResponse.json(
-      { ok: false, error: "Server error", details: String(e?.message || e) },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: "Server error", details: String(e?.message || e) }, { status: 500 });
   }
 }

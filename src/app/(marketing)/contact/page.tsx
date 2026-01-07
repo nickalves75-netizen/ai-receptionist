@@ -11,12 +11,12 @@ export default function ContactPage() {
             <div className={styles.pill}>Contact</div>
 
             <h1 className={styles.h1}>
-              Tell us what you’re running today—<span className={styles.accent}>we’ll map the fix.</span>
+              Tell us what you’re running today—<span className={styles.accent}>we’ll map the system.</span>
             </h1>
 
             <p className={styles.subhead}>
-              The fastest way to start is the Kallr assessment. We’ll review your intake and propose a clean,
-              conversion-focused setup.
+              The fastest way to start is the NEAIS assessment. We’ll review your calls, messages, and intake flow—then recommend a
+              clean, conversion-focused setup.
             </p>
 
             <div className={styles.heroCtas}>

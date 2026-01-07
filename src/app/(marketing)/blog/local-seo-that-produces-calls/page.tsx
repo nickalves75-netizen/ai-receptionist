@@ -37,10 +37,13 @@ export default function BlogPost() {
               <li>Tracking: measure calls + booked outcomes</li>
             </ul>
 
-            <h3 className={styles.panelTitle} style={{ marginTop: 18 }}>The multiplier: SEO + 24/7 intake</h3>
+            <h3 className={styles.panelTitle} style={{ marginTop: 18 }}>
+              The multiplier: SEO + 24/7 intake
+            </h3>
             <p className={styles.sectionSub} style={{ textAlign: "left" }}>
-              SEO traffic often peaks nights/weekends. If nobody answers, you’re leaking the most valuable moments.
-              Kallr makes SEO more profitable by capturing calls and following up by SMS automatically.
+              Local intent often peaks nights and weekends. If nobody answers, you’re leaking the highest-value moments.
+              NEAIS helps close that gap by answering calls, handling messages, and routing next steps automatically—so the lead keeps
+              moving even when your team is offline.
             </p>
 
             <div className={styles.panelFoot}>

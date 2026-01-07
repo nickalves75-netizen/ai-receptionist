@@ -89,6 +89,12 @@ async function verifyTurnstile(token: string | null) {
   return { ok: true as const, skipped: false as const };
 }
 
+function getPublicBase() {
+  return (
+    (process.env.NEAIS_PUBLIC_BASE_URL || process.env.KALLR_PUBLIC_BASE_URL || "").replace(/\/+$/, "")
+  );
+}
+
 function leadEmailHtml(args: {
   lead_id: string | null;
   source: string;
@@ -99,8 +105,14 @@ function leadEmailHtml(args: {
   website: string;
   url: string;
 }) {
-  const base = (process.env.KALLR_PUBLIC_BASE_URL || "").replace(/\/+$/, "");
-  const internalLeadUrl = args.lead_id ? `${base}/internal/leads/${args.lead_id}` : `${base}/internal`;
+  const base = getPublicBase();
+  const internalLeadUrl = args.lead_id
+    ? base
+      ? `${base}/internal/leads/${args.lead_id}`
+      : `/internal/leads/${args.lead_id}`
+    : base
+    ? `${base}/internal`
+    : `/internal`;
 
   const row = (k: string, v: string) => `
     <tr>
@@ -116,7 +128,7 @@ function leadEmailHtml(args: {
   <div style="font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:#f6f7f8; padding:24px;">
     <div style="max-width:680px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;overflow:hidden;">
       <div style="padding:18px 20px;background:linear-gradient(135deg,#0aa07f,#0e7a64);color:#fff;">
-        <div style="font-size:16px;font-weight:800;letter-spacing:.2px;">New Lead — Kallr</div>
+        <div style="font-size:16px;font-weight:800;letter-spacing:.2px;">New Lead — NEAIS</div>
         <div style="opacity:.9;font-size:13px;margin-top:4px;">Source: ${esc(args.source)}</div>
       </div>
 
@@ -124,11 +136,20 @@ function leadEmailHtml(args: {
         <table style="width:100%;border-collapse:collapse;">
           ${row("Lead ID", esc(args.lead_id || "—"))}
           ${row("Name", esc(args.name))}
-          ${row("Email", `<a href="mailto:${esc(args.email)}" style="color:#0e7a64;text-decoration:none;">${esc(args.email)}</a>`)}
+          ${row(
+            "Email",
+            `<a href="mailto:${esc(args.email)}" style="color:#0e7a64;text-decoration:none;">${esc(args.email)}</a>`
+          )}
           ${row("Phone", esc(args.phone || "—"))}
           ${row("Company", esc(args.company_name || "—"))}
-          ${row("Website", `<a href="${esc(args.website)}" style="color:#0e7a64;text-decoration:none;">${esc(args.website)}</a>`)}
-          ${row("Submitted from URL", `<a href="${esc(args.url)}" style="color:#0e7a64;text-decoration:none;">${esc(args.url)}</a>`)}
+          ${row(
+            "Website",
+            `<a href="${esc(args.website)}" style="color:#0e7a64;text-decoration:none;">${esc(args.website)}</a>`
+          )}
+          ${row(
+            "Submitted from URL",
+            `<a href="${esc(args.url)}" style="color:#0e7a64;text-decoration:none;">${esc(args.url)}</a>`
+          )}
         </table>
 
         <div style="margin-top:16px;">
@@ -158,16 +179,22 @@ async function sendLeadEmail(args: {
   url: string;
 }) {
   const apiKey = process.env.RESEND_API_KEY;
-  const toList = (process.env.KALLR_LEAD_NOTIFY_EMAILS || "")
+
+  const toList = (process.env.NEAIS_LEAD_NOTIFY_EMAILS || process.env.KALLR_LEAD_NOTIFY_EMAILS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const from = process.env.KALLR_FROM_EMAIL || "Kallr <onboarding@resend.dev>";
+  const from =
+    process.env.NEAIS_FROM_EMAIL || process.env.KALLR_FROM_EMAIL || "NEAIS <onboarding@resend.dev>";
 
   // If not configured yet, silently skip (do not break lead flow)
   if (!apiKey || !toList.length) {
-    return { ok: false as const, skipped: true as const, detail: "Email not configured (missing RESEND_API_KEY or KALLR_LEAD_NOTIFY_EMAILS)." };
+    return {
+      ok: false as const,
+      skipped: true as const,
+      detail: "Email not configured (missing RESEND_API_KEY or NEAIS_LEAD_NOTIFY_EMAILS).",
+    };
   }
 
   const subject = `New lead: ${args.name}${args.company_name ? ` — ${args.company_name}` : ""}`;
@@ -279,9 +306,7 @@ export async function POST(req: NextRequest) {
       url,
     });
 
-    if (!emailRes.ok && !emailRes.skipped) {
-      warning = warning ? `${warning} | ${emailRes.detail}` : emailRes.detail;
-    } else if (emailRes.skipped) {
+    if (!emailRes.ok) {
       warning = warning ? `${warning} | ${emailRes.detail}` : emailRes.detail;
     }
 

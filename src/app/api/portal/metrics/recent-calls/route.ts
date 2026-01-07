@@ -10,6 +10,20 @@ function outcomeLabelFromBooleans(r: any): string {
   return "info_only";
 }
 
+function findOutcomeResult(structuredOutputs: any) {
+  if (!structuredOutputs || typeof structuredOutputs !== "object") return null;
+
+  const acceptedNames = new Set(["NEAIS Call Outcome (v1)", "Kallr Call Outcome (v1)"]);
+
+  for (const k of Object.keys(structuredOutputs)) {
+    const item = (structuredOutputs as any)[k];
+    if (item?.name && acceptedNames.has(String(item.name))) {
+      return item?.result ?? null;
+    }
+  }
+  return null;
+}
+
 export async function GET() {
   // 1) Auth check (cookie-based)
   const supabase = await createSupabaseServer();
@@ -20,17 +34,33 @@ export async function GET() {
   }
 
   // 2) Securely determine business_id via membership
-  const { data: membership, error: memErr } = await supabaseAdmin
-    .from("business_users")
+  // Prefer RLS membership if available; fallback to admin lookup
+  let businessId: string | null = null;
+
+  const { data: membershipRls } = await supabase
+    .from("business_memberships")
     .select("business_id")
     .eq("user_id", userRes.user.id)
     .limit(1)
     .maybeSingle();
 
-  if (memErr) {
-    return NextResponse.json({ error: "db_error", detail: memErr.message }, { status: 500 });
+  if (membershipRls?.business_id) {
+    businessId = String(membershipRls.business_id);
+  } else {
+    const { data: membership, error: memErr } = await supabaseAdmin
+      .from("business_users")
+      .select("business_id")
+      .eq("user_id", userRes.user.id)
+      .limit(1)
+      .maybeSingle();
+
+    if (memErr) {
+      return NextResponse.json({ error: "db_error", detail: memErr.message }, { status: 500 });
+    }
+    if (membership?.business_id) businessId = String(membership.business_id);
   }
-  if (!membership?.business_id) {
+
+  if (!businessId) {
     return NextResponse.json({ error: "no_business" }, { status: 403 });
   }
 
@@ -38,7 +68,7 @@ export async function GET() {
   const { data: calls, error: callsErr } = await supabaseAdmin
     .from("calls")
     .select("id, status, from_number, to_number, started_at, ended_at, collected_data")
-    .eq("business_id", membership.business_id)
+    .eq("business_id", businessId)
     .order("started_at", { ascending: false })
     .limit(25);
 
@@ -49,27 +79,12 @@ export async function GET() {
   // 4) Map into UI-friendly rows
   const rows = (calls || []).map((c: any) => {
     const so = c.collected_data?.structured_outputs;
-    let r: any = null;
-
-    if (so && typeof so === "object") {
-      for (const k of Object.keys(so)) {
-        const item = so[k];
-        if (item?.name === "Kallr Call Outcome (v1)") {
-          r = item?.result ?? null;
-          break;
-        }
-      }
-    }
+    const r = findOutcomeResult(so);
 
     const outcome = outcomeLabelFromBooleans(r);
     const durationSeconds =
       c.started_at && c.ended_at
-        ? Math.max(
-            0,
-            Math.round(
-              (new Date(c.ended_at).getTime() - new Date(c.started_at).getTime()) / 1000
-            )
-          )
+        ? Math.max(0, Math.round((new Date(c.ended_at).getTime() - new Date(c.started_at).getTime()) / 1000))
         : null;
 
     return {

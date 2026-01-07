@@ -13,11 +13,11 @@ function isStaffUser(user: any): boolean {
     user?.role ??
     "";
 
-  if (typeof role === "string" && ["staff", "admin", "kallr"].includes(role.toLowerCase())) {
+  if (typeof role === "string" && ["staff", "admin", "neais"].includes(role.toLowerCase())) {
     return true;
   }
 
-  const allow = (process.env.NEXT_PUBLIC_KALLR_STAFF_EMAILS ?? "")
+  const allow = (process.env.NEXT_PUBLIC_NEAIS_STAFF_EMAILS ?? "")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);

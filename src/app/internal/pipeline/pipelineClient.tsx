@@ -26,14 +26,8 @@ function fmtMoney(v: any) {
 }
 
 function StarIcon({ filled }: { filled: boolean }) {
-  // clean inline SVG, no dependency
   return (
-    <svg
-      className={styles.favIcon}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      focusable="false"
-    >
+    <svg className={styles.favIcon} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       <path
         d="M12 17.6l-5.4 3.2 1.4-6.1L3 9.9l6.3-.6L12 3.6l2.7 5.7 6.3.6-5 4.8 1.4 6.1z"
         fill={filled ? "rgba(247,231,182,0.95)" : "transparent"}
@@ -44,6 +38,9 @@ function StarIcon({ filled }: { filled: boolean }) {
     </svg>
   );
 }
+
+const FAV_KEY_NEW = "neais_pipeline_favs";
+const FAV_KEY_OLD = "kallr_pipeline_favs";
 
 export default function PipelineClient({
   pipeline,
@@ -80,7 +77,8 @@ export default function PipelineClient({
 
   useEffect(() => {
     try {
-      const raw = window.localStorage.getItem("kallr_pipeline_favs");
+      // ✅ read new key first, then fallback to old key (so you don’t lose existing favorites)
+      const raw = window.localStorage.getItem(FAV_KEY_NEW) ?? window.localStorage.getItem(FAV_KEY_OLD);
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") setFav(parsed);
@@ -91,7 +89,7 @@ export default function PipelineClient({
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("kallr_pipeline_favs", JSON.stringify(fav));
+      window.localStorage.setItem(FAV_KEY_NEW, JSON.stringify(fav));
     } catch {
       // ignore
     }
@@ -105,9 +103,8 @@ export default function PipelineClient({
   }
 
   function sortByFav<T extends { id: any }>(arr: T[]) {
-    // stable sort: favorites first, otherwise keep original order
     const tagged = arr.map((x, idx) => ({ x, idx, f: isFav(String(x.id)) ? 1 : 0 }));
-    tagged.sort((a, b) => (b.f - a.f) || (a.idx - b.idx));
+    tagged.sort((a, b) => b.f - a.f || a.idx - b.idx);
     return tagged.map((t) => t.x);
   }
 
@@ -321,17 +318,15 @@ export default function PipelineClient({
                             stopAutoScroll();
                           }}
                         >
-                          {/* Header / green bar */}
                           <button type="button" className={styles.cardHeader} onClick={() => go(id)} title="Open lead">
                             <div className={styles.cardHeaderInner}>
                               <div className={styles.cardCompany}>{l._company}</div>
 
-                              {/* Favorite button */}
                               <button
                                 type="button"
                                 className={styles.favBtn}
                                 onClick={(e) => {
-                                  e.stopPropagation(); // don't open lead
+                                  e.stopPropagation();
                                   toggleFav(id);
                                 }}
                                 aria-label={favored ? "Unfavorite lead" : "Favorite lead"}
@@ -342,7 +337,6 @@ export default function PipelineClient({
                             </div>
                           </button>
 
-                          {/* Collapsed view */}
                           <div className={styles.cardBody}>
                             <div className={styles.row}>
                               <div className={styles.rowLabel}>Contact</div>
@@ -357,7 +351,6 @@ export default function PipelineClient({
                             </div>
                           </div>
 
-                          {/* Expandable */}
                           <div className={`${styles.expandWrap} ${open ? styles.expandOpen : ""}`}>
                             <div className={styles.expandInner}>
                               <div className={styles.sep} />
@@ -411,7 +404,6 @@ export default function PipelineClient({
                             </div>
                           </div>
 
-                          {/* View more pinned bottom */}
                           <button
                             type="button"
                             className={`${styles.viewMore} ${open ? styles.viewMoreUp : ""}`}
@@ -437,14 +429,12 @@ export default function PipelineClient({
         </div>
       </div>
 
-      {/* Confirm modal */}
       {pending ? (
         <div className={styles.modalOverlay} role="dialog" aria-modal="true">
           <div className={styles.modalCard}>
             <div className={styles.modalTitle}>Confirm Move</div>
             <div className={styles.modalBody}>
-              Are you sure you’d like to move{" "}
-              <span className={styles.modalStrong}>{pending.leadLabel}</span> to{" "}
+              Are you sure you’d like to move <span className={styles.modalStrong}>{pending.leadLabel}</span> to{" "}
               <span className={styles.modalStrong}>{pending.toLabel}</span>?
             </div>
 

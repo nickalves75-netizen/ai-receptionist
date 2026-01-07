@@ -9,6 +9,20 @@ function parseDays(url: string) {
   return n as 1 | 7 | 30;
 }
 
+function findOutcomeResult(structuredOutputs: any) {
+  if (!structuredOutputs || typeof structuredOutputs !== "object") return null;
+
+  const acceptedNames = new Set(["NEAIS Call Outcome (v1)", "Kallr Call Outcome (v1)"]);
+
+  for (const k of Object.keys(structuredOutputs)) {
+    const item = (structuredOutputs as any)[k];
+    if (item?.name && acceptedNames.has(String(item.name))) {
+      return item?.result ?? null;
+    }
+  }
+  return null;
+}
+
 export async function GET(req: Request) {
   // 1) Auth check (cookie-based)
   const supabase = await createSupabaseServer();
@@ -61,18 +75,7 @@ export async function GET(req: Request) {
     if (c.status === "completed" || c.status === "handled") answered += 1;
 
     const so = (c as any).collected_data?.structured_outputs;
-    let r: any = null;
-
-    // Find result object for "Kallr Call Outcome (v1)"
-    if (so && typeof so === "object") {
-      for (const k of Object.keys(so)) {
-        const item = (so as any)[k];
-        if (item?.name === "Kallr Call Outcome (v1)") {
-          r = item?.result ?? null;
-          break;
-        }
-      }
-    }
+    const r = findOutcomeResult(so);
 
     if (r?.lead_captured === true) leads += 1;
     if (r?.transferred === true) transfers += 1;

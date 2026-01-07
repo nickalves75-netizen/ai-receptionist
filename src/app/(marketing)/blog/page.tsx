@@ -53,7 +53,7 @@ export default function BlogIndexPage() {
         className={styles.hero}
         style={{
           backgroundImage:
-            "linear-gradient(180deg, rgba(43, 43, 43, 0.9), rgba(255,255,255,0.92)), url('/kallroffice.png')",
+            "linear-gradient(180deg, rgba(43, 43, 43, 0.9), rgba(255,255,255,0.92)), url('/brand/neais-logo-800w.png')",
           backgroundSize: "cover",
           backgroundPosition: "82% 18%",
           backgroundRepeat: "no-repeat",
@@ -64,12 +64,11 @@ export default function BlogIndexPage() {
             <div className={styles.heroInner}>
               <div className={styles.pill}>Blog</div>
 
-              <h1 className={styles.h1}>Kallr Note Series</h1>
+              <h1 className={styles.h1}>NEAIS Field Notes</h1>
 
               <p className={styles.subhead}>
-                Our blog is a running set of practical notes—built from real conversations with growing
-                businesses. We share what’s working right now to capture leads faster, follow up cleaner,
-                and book more revenue without adding headcount.
+                Practical notes built from real conversations with growing businesses. We share what’s working to capture leads
+                faster, follow up cleaner, and book more revenue—without adding headcount.
               </p>
             </div>
           </div>
@@ -80,10 +79,7 @@ export default function BlogIndexPage() {
 
       <Reveal as="section" className={styles.section} delayMs={40}>
         <div className={styles.container}>
-          <div
-            className={styles.grid4}
-            style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" as any }}
-          >
+          <div className={styles.grid4} style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" as any }}>
             {posts.map((p, idx) => (
               <Reveal key={p.href} as="div" delayMs={80 + idx * 60} className={styles.card}>
                 <div className={styles.sectionSub} style={{ textAlign: "left" }}>

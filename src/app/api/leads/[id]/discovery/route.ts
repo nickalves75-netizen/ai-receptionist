@@ -17,9 +17,9 @@ function bad(detail: string, status = 400) {
 
 function isStaff(user: any): boolean {
   const role = user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role ?? "";
-  if (typeof role === "string" && ["staff", "admin", "kallr"].includes(role.toLowerCase())) return true;
+  if (typeof role === "string" && ["staff", "admin", "neais", "neais"].includes(role.toLowerCase())) return true;
 
-  const allow = (process.env.KALLR_STAFF_EMAILS ?? "")
+  const allow = (process.env.NEAIS_STAFF_EMAILS ?? process.env.NEAIS_STAFF_EMAILS ?? "")
     .split(",")
     .map((x) => x.trim().toLowerCase())
     .filter(Boolean);
@@ -91,8 +91,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   // Accept multiple shapes so we never “break” the client:
   // { discovery: {...}, status?: "in_progress"|"complete", complete?: boolean }
   // or just { ...discoveryFields }
-  const incomingDiscovery =
-    body.discovery && typeof body.discovery === "object" ? asObj(body.discovery) : asObj(body);
+  const incomingDiscovery = body.discovery && typeof body.discovery === "object" ? asObj(body.discovery) : asObj(body);
 
   const statusRaw = String(body.status ?? body.discovery_status ?? "").trim().toLowerCase();
   const wantsComplete = Boolean(body.complete) || statusRaw === "complete";
@@ -100,11 +99,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   const nowIso = new Date().toISOString();
 
   // Merge with existing discovery so partial saves don’t wipe earlier steps
-  const { data: prevRow, error: prevErr } = await supabaseAdmin
-    .from("leads")
-    .select("discovery")
-    .eq("id", id)
-    .maybeSingle();
+  const { data: prevRow, error: prevErr } = await supabaseAdmin.from("leads").select("discovery").eq("id", id).maybeSingle();
 
   if (prevErr) return json({ error: "db_error", detail: prevErr.message }, 500);
 

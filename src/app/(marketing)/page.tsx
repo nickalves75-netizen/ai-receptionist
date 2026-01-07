@@ -4,7 +4,7 @@ import styles from "@/app/(marketing)/page.module.css";
 export default function HomePage() {
   return (
     <MarketingLanding
-      pill="AI Reception + SMS Automations + Local SEO"
+      pill="AI for Calls • AI for Messages • AI for Automation"
       sourcePrefix="home"
       title={
         <>

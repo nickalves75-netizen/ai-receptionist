@@ -7,6 +7,7 @@ function requireSecret(req: NextRequest) {
   const expected = process.env.VAPI_TOOL_SECRET;
   if (!expected) return true; // allows calls if unset (not recommended)
   const got =
+    req.headers.get("x-neais-secret") ||
     req.headers.get("x-kallr-secret") ||
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
   return got === expected;
@@ -189,8 +190,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(payload),
     });
 
-    const square_trace_id =
-      res.headers.get("square-trace-id") || res.headers.get("x-request-id") || undefined;
+    const square_trace_id = res.headers.get("square-trace-id") || res.headers.get("x-request-id") || undefined;
 
     let json: any = null;
     try {
@@ -252,8 +252,7 @@ export async function POST(req: NextRequest) {
             duration_minutes: duration,
             team_member_id: tm,
             service_variation_id: sid,
-            service_variation_version:
-              typeof seg?.service_variation_version === "number" ? seg.service_variation_version : undefined,
+            service_variation_version: typeof seg?.service_variation_version === "number" ? seg.service_variation_version : undefined,
           },
         ],
         team_member_id: tm,

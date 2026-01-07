@@ -6,9 +6,9 @@ export const revalidate = 0;
 
 function isStaff(user: any): boolean {
   const role = user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role ?? "";
-  if (typeof role === "string" && ["staff", "admin", "kallr"].includes(role.toLowerCase())) return true;
+  if (typeof role === "string" && ["staff", "admin", "neais"].includes(role.toLowerCase())) return true;
 
-  const allow = (process.env.KALLR_STAFF_EMAILS ?? "")
+  const allow = (process.env.NEAIS_STAFF_EMAILS ?? "")
     .split(",")
     .map((x) => x.trim().toLowerCase())
     .filter(Boolean);
