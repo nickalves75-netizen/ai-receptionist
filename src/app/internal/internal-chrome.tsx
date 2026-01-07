@@ -125,7 +125,7 @@ export default function InternalChrome({ children }: { children: React.ReactNode
       <aside className={s.sidebar}>
         <div className={s.brandRow}>
           <div className={s.brandIcon}>
-            <Image src="/kallricon.png" alt="Kallr" width={40} height={40} />
+            <Image src="/neais-logo.png" alt="Kallr" width={40} height={40} />
           </div>
           <div className={s.brandText}>
             <div className={s.brandTitle}>Internal</div>
