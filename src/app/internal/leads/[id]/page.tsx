@@ -377,7 +377,7 @@ export default async function LeadDetailPage({
         <div className={ls.headerRow}>
           <div className={ls.headerLeft}>
             <div className={ls.brandMark}>
-              <Image src="/kallr.png" alt="Kallr" width={34} height={34} className={ls.brandLogo} />
+              <Image src="/neais-logo.png" alt="Kallr" width={34} height={34} className={ls.brandLogo} />
               <div className={ls.sub} style={{ fontWeight: 950 }}>
                 Lead Profile
               </div>
