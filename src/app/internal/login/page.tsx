@@ -118,7 +118,7 @@ export default function InternalLoginPage() {
       {/* center */}
       <div style={styles.centerWrap}>
         <div style={styles.iconWrap}>
-          <Image src="/kallricon2.png"alt="Kallr" width={200} height={200} priority />
+          <Image src="/neais-logo.png"alt="Kallr" width={200} height={200} priority />
         </div>
 
         <section style={styles.card}>
@@ -174,7 +174,7 @@ const styles: Record<string, React.CSSProperties> = {
   bg: {
     position: "absolute",
     inset: 0,
-    backgroundImage: "url('/kallrbackground.png')",
+    backgroundImage: "url('/neais-logo.png')",
     backgroundRepeat: "no-repeat",
     backgroundPosition: "bottom center",
     backgroundSize: "cover",
