@@ -44,7 +44,7 @@ export default function Footer() {
         <div className={styles.brandCol}>
           <div className={styles.brandRow}>
             <Image
-              src="/kallricon.png"
+              src="/neais-logo.png"
               alt="Kallr icon"
               width={64}
               height={64}
