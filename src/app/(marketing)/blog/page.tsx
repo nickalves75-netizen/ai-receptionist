@@ -53,7 +53,7 @@ export default function BlogIndexPage() {
         className={styles.hero}
         style={{
           backgroundImage:
-            "linear-gradient(180deg, rgba(43, 43, 43, 0.9), rgba(255,255,255,0.92)), url('/brand/neais-logo-800w.png')",
+            "linear-gradient(180deg, rgba(43, 43, 43, 0.9), rgba(255,255,255,0.92)), url('/neais-logo-800w.png')",
           backgroundSize: "cover",
           backgroundPosition: "82% 18%",
           backgroundRepeat: "no-repeat",

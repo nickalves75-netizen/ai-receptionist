@@ -46,7 +46,7 @@ export default function QuotesPage() {
         className={styles.hero}
         style={{
           backgroundImage:
-            "linear-gradient(180deg, var(--k-hero-a), var(--k-hero-b)), url('/brand/neais-logo-800w.png')",
+            "linear-gradient(180deg, var(--k-hero-a), var(--k-hero-b)), url('/neais-logo-800w.png')",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
