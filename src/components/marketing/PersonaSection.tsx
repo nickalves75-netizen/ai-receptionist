@@ -24,10 +24,7 @@ export default function PersonaSection(props: {
       ? "A Receptionist Experience That Feels Personal"
       : "A Receptionist Experience Built for Speed & Clarity");
 
-  const body =
-    props.body ??
-    "NEAIS
-     answers in a natural voice, asks the right questions, captures clean notes, and routes the next step—24/7. No missed calls. No awkward hand-offs. Just a consistent intake that converts.";
+  const body = props.body ?? "NEAIS answers in a natural voice, asks the right questions, captures clean notes, and routes the next step—24/7. No missed calls. No awkward hand-offs. Just a consistent intake that converts.";
 
   const bullets =
     props.bullets ??
