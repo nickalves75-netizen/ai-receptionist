@@ -82,7 +82,7 @@ export default function Navbar() {
     <header className={`${styles.header} ${scrolled ? styles.scrolled : ""}`}>
       <div className={styles.inner}>
         <Link href="/" className={styles.brand} aria-label="NEAIS Home" onClick={closeAll}>
-          <Image src="public\brand\neais-logo-200w.png" alt="NEAIS" width={120} height={34} priority className={styles.logo} />
+          <Image src="public\brand\android-chrome-512x512.png" alt="NEAIS" width={120} height={34} priority className={styles.logo} />
         </Link>
 
         <nav className={styles.nav}>
