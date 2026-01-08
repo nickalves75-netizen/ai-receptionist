@@ -1,0 +1,194 @@
+warning: in the working copy of 'src/app/internal/leads/[id]/page.tsx', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/src/app/internal/leads/[id]/page.tsx b/src/app/internal/leads/[id]/page.tsx[m
+[1mindex 1bac138..1bf8b04 100644[m
+[1m--- a/src/app/internal/leads/[id]/page.tsx[m
+[1m+++ b/src/app/internal/leads/[id]/page.tsx[m
+[36m@@ -1,259 +1,1000 @@[m
+[31m-"use client";[m
+[31m-[m
+[32m+[m[32m// src/app/internal/leads/[id]/page.tsx[m
+[32m+[m[32mimport Link from "next/link";[m
+ import Image from "next/image";[m
+[31m-import { useMemo, useState } from "react";[m
+[31m-import { useRouter } from "next/navigation";[m
+[31m-import styles from "./sales-studio.module.css";[m
+[31m-[m
+[31m-type LeadType = "WOM" | "Referral" | "Sales Canvassing";[m
+[31m-[m
+[31m-export default function SalesStudioPage() {[m
+[31m-  const router = useRouter();[m
+[31m-[m
+[31m-  const [companyName, setCompanyName] = useState("");[m
+[31m-  const [contactName, setContactName] = useState("");[m
+[31m-  const [phone, setPhone] = useState("");[m
+[31m-  const [email, setEmail] = useState("");[m
+[31m-  const [industry, setIndustry] = useState("");[m
+[31m-  const [leadType, setLeadType] = useState<LeadType>("WOM");[m
+[31m-  const [referralName, setReferralName] = useState("");[m
+[31m-  const [repName, setRepName] = useState("");[m
+[31m-[m
+[31m-  const [submitErr, setSubmitErr] = useState<string | null>(null);[m
+[31m-  const [submitting, setSubmitting] = useState(false);[m
+[31m-[m
+[31m-  const needsReferralName = leadType === "Referral";[m
+[31m-[m
+[31m-  const canSubmit = useMemo(() => {[m
+[31m-    const base =[m
+[31m-      companyName.trim().length > 1 &&[m
+[31m-      phone.trim().length > 6 &&[m
+[31m-      email.trim().length > 4 &&[m
+[31m-      industry.trim().length > 1 &&[m
+[31m-      repName.trim().length > 1;[m
+[31m-[m
+[31m-    if (!base) return false;[m
+[31m-    if (needsReferralName) return referralName.trim().length > 1;[m
+[31m-    return true;[m
+[31m-  }, [companyName, phone, email, industry, repName, needsReferralName, referralName]);[m
+[31m-[m
+[31m-  async function onCreateLead(e: React.FormEvent) {[m
+[31m-    e.preventDefault();[m
+[31m-    setSubmitErr(null);[m
+[31m-[m
+[31m-    if (!canSubmit) {[m
+[31m-      setSubmitErr("Please fill in all required fields.");[m
+[31m-      return;[m
+[31m-    }[m
+[31m-[m
+[31m-    setSubmitting(true);[m
+[31m-    try {[m
+[31m-      const body = {[m
+[31m-        source: leadType,[m
+[31m-        data: {[m
+[31m-          companyName: companyName.trim(),[m
+[31m-          fullName: contactName.trim() || null,[m
+[31m-          phone: phone.trim(),[m
+[31m-          email: email.trim(),[m
+[31m-          industry: industry.trim(),[m
+[31m-          leadType,[m
+[31m-          referralName: needsReferralName ? referralName.trim() : null,[m
+[31m-          repName: repName.trim(),[m
+[31m-          createdFrom: "sales_studio",[m
+[31m-        },[m
+[31m-      };[m
+[31m-[m
+[31m-      const res = await fetch("/api/leads", {[m
+[31m-        method: "POST",[m
+[31m-        headers: { "Content-Type": "application/json" },[m
+[31m-        body: JSON.stringify(body),[m
+[31m-      });[m
+[31m-[m
+[31m-      const data = await res.json().catch(() => ({}));[m
+[31m-[m
+[31m-      if (!res.ok || !data?.ok) {[m
+[31m-        const msg = data?.error || `Lead creation failed (${res.status}).`;[m
+[31m-        throw new Error(msg);[m
+[31m-      }[m
+[31m-[m
+[31m-      const id = String(data?.id || "").trim();[m
+[31m-      if (!id) throw new Error("Lead created, but no lead id was returned.");[m
+[31m-[m
+[31m-      // ✅ NEW: go into the proposal/discovery presentation funnel[m
+[31m-      router.push(`/internal/proposals/${encodeURIComponent(id)}`);[m
+[31m-    } catch (err: any) {[m
+[31m-      setSubmitErr(err?.message ? String(err.message) : "Something went wrong.");[m
+[31m-    } finally {[m
+[31m-      setSubmitting(false);[m
+[31m-    }[m
+[32m+[m[32mimport { redirect } from "next/navigation";[m
+[32m+[m[32mimport type { CSSProperties } from "react";[m
+[32m+[m[32mimport ls from "./lead.module.css";[m
+[32m+[m
+[32m+[m[32mimport { createSupabaseServer } from "@/lib/supabase/server";[m
+[32m+[m[32mimport { supabaseAdmin } from "@/lib/supabaseAdmin";[m
+[32m+[m[32mexport const dynamic = "force-dynamic";[m
+[32m+[m[32mexport const revalidate = 0;[m
+[32m+[m
+[32m+[m[32mfunction isStaff(user: any): boolean {[m
+[32m+[m[32m  const role = user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role ?? "";[m
+[32m+[m[32m  if (typeof role === "string" && ["staff", "admin", "kallr"].includes(role.toLowerCase())) return true;[m
+[32m+[m
+[32m+[m[32m  const allow = (process.env.KALLR_STAFF_EMAILS ?? "")[m
+[32m+[m[32m    .split(",")[m
+[32m+[m[32m    .map((x) => x.trim().toLowerCase())[m
+[32m+[m[32m    .filter(Boolean);[m
+[32m+[m
+[32m+[m[32m  const email = (user?.email ?? "").toLowerCase();[m
+[32m+[m[32m  if (allow.length && email && allow.includes(email)) return true;[m
+[32m+[m
+[32m+[m[32m  return false;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32masync function requireStaff() {[m
+[32m+[m[32m  const sb = await createSupabaseServer();[m
+[32m+[m
+[32m+[m[32m  const { data: sess } = await sb.auth.getSession();[m
+[32m+[m[32m  if (!sess.session) redirect("/internal/login");[m
+[32m+[m
+[32m+[m[32m  const { data: u } = await sb.auth.getUser();[m
+[32m+[m[32m  if (!isStaff(u.user)) redirect("/");[m
+[32m+[m
+[32m+[m[32m  return { sb, user: u.user };[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mconst PIPELINE = [[m
+[32m+[m[32m  { key: "new", label: "New Inquiry" },[m
+[32m+[m[32m  { key: "qualified", label: "Qualified" },[m
+[32m+[m[32m  { key: "working", label: "Working" },[m
+[32m+[m[32m  { key: "proposal", label: "Proposal" },[m
+[32m+[m[32m  { key: "paid", label: "Paid" },[m
+[32m+[m[32m  { key: "recurring", label: "Recurring" },[m
+[32m+[m[32m  { key: "past_due", label: "Past Due" },[m
+[32m+[m[32m  { key: "closed", label: "Closed" },[m
+[32m+[m[32m];[m
+[32m+[m
+[32m+[m[32mfunction safe(v: any) {[m
+[32m+[m[32m  if (v === null || v === undefined) return "";[m
+[32m+[m[32m  return String(v);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction isUuid(v: string) {[m
+[32m+[m[32m  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction asObj(v: any): Record<string, any> {[m
+[32m+[m[32m  if (v && typeof v === "object" && !Array.isArray(v)) return v as Record<string, any>;[m
+[32m+[m[32m  return {};[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction fmtList(v: any) {[m
+[32m+[m[32m  if (Array.isArray(v)) return v.filter(Boolean).join(", ");[m
+[32m+[m[32m  if (typeof v === "string") return v;[m
+[32m+[m[32m  return "";[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction firstStr(...vals: any[]) {[m
+[32m+[m[32m  for (const v of vals) {[m
+[32m+[m[32m    const s = safe(v).trim();[m
+[32m+[m[32m    if (s) return s;[m
+   }[m
+[32m+[m[32m  return "";[m
+[32m+[m[32m}[m
+ [m
+[31m-  return ([m
+[31m-    <main className={styles.page}>[m
+[31m-      <div className={styles.bg} aria-hidden="true" />[m
+[31m-[m
+[31m-      <section className={styles.shell}>[m
+[31m-        <header className={styles.header}>[m
+[31m-          <div className={styles.hero}>[m
+[31m-            <div className={styles.heroLogo} aria-hidden="true">[m
+[31m-              <Image[m
+[31m-                src="/neais-logo.png"[m
+[31m-                alt=""[m
+[31m-                width={92}[m
+[31m-                height={92}[m
+[31m-                priority[m
+[31m-                className={styles.logo}[m
+[31m-              />[m
+[32m+[m[32mfunction yn(v: any) {[m
+[32m+[m[32m  if (v === true) return "Yes";[m
+[32m+[m[32m  if (v === false) return "No";[m
+[32m+[m[32m  return "—";[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[
