@@ -81,8 +81,8 @@ export default function Navbar() {
   return (
     <header className={`${styles.header} ${scrolled ? styles.scrolled : ""}`}>
       <div className={styles.inner}>
-        <Link href="/" className={styles.brand} aria-label="Kallr Home" onClick={closeAll}>
-          <Image src="/public/neais-logo.png" alt="Kallr" width={120} height={34} priority className={styles.logo} />
+        <Link href="/" className={styles.brand} aria-label="NEAIS Home" onClick={closeAll}>
+          <Image src="public\brand\neais-logo-800w.png" alt="NEAIS" width={120} height={34} priority className={styles.logo} />
         </Link>
 
         <nav className={styles.nav}>
