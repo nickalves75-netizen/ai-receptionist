@@ -66,8 +66,8 @@ export default function MarketingLanding(props: {
                 </LeadCtaButton>
               </span>
 
-              <a className={`${styles.btn} ${styles.btnOutline}`} href="/case-studies">
-                View Case Studies
+              <a className={`${styles.btn} ${styles.btnOutline}`} href="/ai-consulting">
+                Hire Consultant
               </a>
             </div>
           </div>
@@ -80,60 +80,60 @@ export default function MarketingLanding(props: {
       <Reveal as="section" className={styles.section} delayMs={40}>
         <div className={styles.container}>
           <Reveal as="div" delayMs={60}>
-            <h2 className={styles.h2}>Our Solutions</h2>
+            <h2 className={styles.h2}>Solutions</h2>
             <p className={styles.sectionSub}>
-              A clean, conversion-focused system that turns inbound interest into booked revenue.
+              Our experience team will help you get up to date with technology.
             </p>
           </Reveal>
 
           <div className={styles.grid4}>
             <Reveal as="div" delayMs={80} className={styles.card}>
               <div className={styles.cardIcon}>☎️</div>
-              <h3 className={styles.cardTitle}>AI Phone Receptionist</h3>
-              <p className={styles.cardText}>Answer calls, qualify leads, and book next steps—instantly.</p>
+              <h3 className={styles.cardTitle}>AI For Phones</h3>
+              <p className={styles.cardText}>Customized voice agents answer the phones for you with zero to little human intervention.</p>
               <ul className={styles.list}>
                 <li>24/7 answering</li>
                 <li>Lead qualification</li>
                 <li>Booking + routing</li>
-                <li>SMS follow-ups</li>
+                <li>Human-like voices</li>
               </ul>
 
               <span onClickCapture={ctaCapture(`${props.sourcePrefix}-solutions-phone`)}>
                 <LeadCtaButton className={styles.cardBtn} source={`${props.sourcePrefix}-solutions-phone`}>
-                  Learn more →
+                  Run assessment →
                 </LeadCtaButton>
               </span>
             </Reveal>
 
             <Reveal as="div" delayMs={150} className={styles.card}>
               <div className={styles.cardIcon}>🔎</div>
-              <h3 className={styles.cardTitle}>SEO Services</h3>
+              <h3 className={styles.cardTitle}>SEO & Website Building</h3>
               <p className={styles.cardText}>
                 Rank for real intent and turn clicks into calls with clean local SEO foundations.
               </p>
               <ul className={styles.list}>
-                <li>Local SEO</li>
-                <li>Content pages</li>
-                <li>Technical fixes</li>
-                <li>Reporting</li>
+                <li>Local SEO Rank Optimizing</li>
+                <li>Graphic Designing</li>
+                <li>Converting Landing Pages</li>
+                <li>Content Management</li>
               </ul>
 
               <span onClickCapture={ctaCapture(`${props.sourcePrefix}-solutions-seo`)}>
                 <LeadCtaButton className={styles.cardBtn} source={`${props.sourcePrefix}-solutions-seo`}>
-                  Learn more →
+                  Run assessment →
                 </LeadCtaButton>
               </span>
             </Reveal>
 
             <Reveal as="div" delayMs={220} className={styles.card}>
               <div className={styles.cardIcon}>💬</div>
-              <h3 className={styles.cardTitle}>AI SMS Automations</h3>
+              <h3 className={styles.cardTitle}>AI for Messages</h3>
               <p className={styles.cardText}>Convert missed calls and inbound leads with instant text workflows.</p>
               <ul className={styles.list}>
                 <li>Missed call text-back</li>
                 <li>Lead nurture sequences</li>
-                <li>Smart reminders</li>
-                <li>Owner alerts</li>
+                <li>Smart Notifications</li>
+                <li>Automated Review Generation</li>
               </ul>
 
               <span onClickCapture={ctaCapture(`${props.sourcePrefix}-solutions-sms`)}>
@@ -145,20 +145,20 @@ export default function MarketingLanding(props: {
 
             <Reveal as="div" delayMs={290} className={styles.card}>
               <div className={styles.cardIcon}>🔌</div>
-              <h3 className={styles.cardTitle}>Seamless Integrations</h3>
+              <h3 className={styles.cardTitle}>Business Consutling</h3>
               <p className={styles.cardText}>
-                Simple workflows that connect your tools—without operational chaos.
+                Internal, Operational, Logistical workflows, problematic fixes, profitable intergrations. 
               </p>
               <ul className={styles.list}>
                 <li>CRM + calendars</li>
                 <li>Forms + websites</li>
-                <li>Call summaries</li>
-                <li>Visibility</li>
+                <li>Lead Funnels</li>
+                <li>Visibility & SEO</li>
               </ul>
 
               <span onClickCapture={ctaCapture(`${props.sourcePrefix}-solutions-integrations`)}>
                 <LeadCtaButton className={styles.cardBtn} source={`${props.sourcePrefix}-solutions-integrations`}>
-                  See what’s possible →
+                  Hire Consultant →
                 </LeadCtaButton>
               </span>
             </Reveal>

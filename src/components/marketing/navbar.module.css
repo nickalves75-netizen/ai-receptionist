@@ -125,7 +125,7 @@
   font-weight: 900;
   border: none;
   cursor: pointer;
-  box-shadow: 0 12px 22px rgba(14,124,102,0.22);
+  box-shadow: 0 12px 22px rgba(241, 6, 6, 0.22);
 }
 
 /* Theme toggle button container (optional) */

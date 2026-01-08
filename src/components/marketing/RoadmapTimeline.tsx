@@ -24,7 +24,7 @@ export default function RoadmapTimeline(props: {
     () =>
       props.steps ?? [
         {
-          title: "Free Consultation",
+          title: "Consultation",
           body: "We learn your current intake, your best customers, and what “a good lead” actually means for your team.",
         },
         {
@@ -133,7 +133,7 @@ export default function RoadmapTimeline(props: {
               <path
                 d="M20 20 L20 980"
                 fill="none"
-                stroke="rgba(14,124,102,0.85)"
+                stroke="rgba(245, 21, 21, 0.85)"
                 strokeWidth="3"
                 strokeDasharray={`${strokeDash} ${strokeDash}`}
                 strokeDashoffset={dashOffset}

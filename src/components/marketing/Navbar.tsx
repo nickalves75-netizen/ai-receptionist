@@ -10,9 +10,10 @@ import ThemeToggle from "@/components/theme/ThemeToggle";
 type Item = { label: string; href: string };
 
 const solutionItems: Item[] = [
-  { label: "AI Phone Receptionist", href: "/ai-phone-receptionist" },
-  { label: "AI SMS Automations", href: "/sms-ai-automations" },
-  { label: "SEO Services", href: "/seo-services" },
+  { label: "Ai For Calls", href: "/ai-phone-receptionist" },
+  { label: "Ai For Messages", href: "/sms-ai-automations" },
+  { label: "Ai For Marketing", href: "/seo-services" },
+  { label: "Ai Business Consulting", href: "/ai-consulting" },
 ];
 
 const industryItems: Item[] = [
@@ -82,7 +83,7 @@ export default function Navbar() {
     <header className={`${styles.header} ${scrolled ? styles.scrolled : ""}`}>
       <div className={styles.inner}>
         <Link href="/" className={styles.brand} aria-label="NEAIS Home" onClick={closeAll}>
-          <Image src="public\android-chrome-512x512.png" alt="NEAIS" width={120} height={34} priority className={styles.logo} />
+          <Image src="/clean-full-name-logo.png" alt="NEAIS" width={300} height={80} priority className={styles.logo} />
         </Link>
 
         <nav className={styles.nav}>
@@ -97,7 +98,7 @@ export default function Navbar() {
                 setOpenLocations(false);
               }}
             >
-              Our Solutions <span className={styles.caret}>▾</span>
+              Solutions <span className={styles.caret}>▾</span>
             </button>
 
             {openSolutions && (
@@ -187,7 +188,7 @@ export default function Navbar() {
           )}
 
           <LeadCtaButton className={styles.cta} source="nav-get-started">
-            Get Started
+            Take Quick Assesment
           </LeadCtaButton>
 
           <ThemeToggle />

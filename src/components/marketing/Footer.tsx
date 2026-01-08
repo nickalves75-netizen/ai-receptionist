@@ -3,9 +3,10 @@ import Image from "next/image";
 import styles from "./footer.module.css";
 
 const solutions = [
-  { label: "AI Phone Receptionist", href: "/ai-phone-receptionist" },
-  { label: "AI SMS Automations", href: "/sms-ai-automations" },
+  { label: "AI For Phones", href: "/ai-phone-receptionist" },
+  { label: "AI For Messages", href: "/sms-ai-automations" },
   { label: "SEO Services", href: "/seo-services" },
+  { label: "Consulting", href: "/ai-consulting" },
 ];
 
 const industries = [
@@ -44,10 +45,10 @@ export default function Footer() {
         <div className={styles.brandCol}>
           <div className={styles.brandRow}>
             <Image
-              src="/logo.png"
+              src="/main-logo.png"
               alt="NEAIS icon"
-              width={64}
-              height={64}
+              width={250}
+              height={75}
               className={styles.brandIcon}
               priority
             />
@@ -55,7 +56,7 @@ export default function Footer() {
           </div>
 
           <p className={styles.blurb}>
-            AI reception + follow-up automation built to capture demand and book the next step—24/7.
+            Intergrations + Work-Flows built to capture demand and get your business to the next step.
           </p>
 
           <div className={styles.meta}>© {year} NEAIS
