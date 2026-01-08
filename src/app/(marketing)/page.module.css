@@ -3,8 +3,8 @@
   background: var(--k-bg);
 
   /* NEAIS palette overrides (scoped to marketing pages) */
-  --k-brand: #1e5eff;   /* clean NEAIS blue */
-  --k-brand2: #ff3b3b;  /* clean NEAIS red */
+  --k-brand: #bd1118;   /* clean NEAIS blue */
+  --k-brand2: #0653ab;  /* clean NEAIS red */
 
   --k-soft: color-mix(in srgb, var(--k-brand) 12%, transparent);
   --k-burst: color-mix(in srgb, var(--k-brand) 22%, transparent);
@@ -110,6 +110,61 @@
   padding: 74px 0;
   background: var(--k-bg);
 }
+/* =========================
+   SOLUTIONS SECTION: background image + overlay (like whySection)
+   ========================= */
+.solutionsSection{
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+
+  /* 👇 your building/city background */
+  background-image: url("/neais-city-background.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 68% 50%;
+
+  padding-top: 74px;
+  padding-bottom: 74px;
+}
+
+/* readability overlay so text/cards stay clean */
+/* OUR SOLUTIONS section background image */
+.solutionssection{
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+
+  background-image: url("/neais-city-background.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 98% 80%;
+
+  padding: 74px 0;
+}
+
+/* readability overlay */
+.solutionssection::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(700px 420px at 72% 18%, rgba(255,255,255,0.10), transparent 62%),
+    linear-gradient(180deg, rgba(17,24,39,0.14), rgba(17,24,39,0.06));
+}
+
+:root[data-theme="dark"] .solutionssection::before{
+  background:
+    radial-gradient(700px 420px at 72% 18%, rgba(255,255,255,0.06), transparent 62%),
+    linear-gradient(180deg, rgba(0,0,0,0.52), rgba(0,0,0,0.26));
+}
+
+/* keep the content above the overlay */
+.solutionssection > *{
+  position: relative;
+  z-index: 1;
+}
 
 .h2 {
   text-align: center;
@@ -131,17 +186,8 @@
 }
 
 /* Cards/boxes */
-.grid4{
-  position: relative;
-  overflow: hidden;
-  border-radius: 24px;
-  background-image: url("/neais-city-background.png");
-  background-size: cover;
-  background-repeat: no-repeat;
-  background-position: 98% 40%;
-  padding-top: 100px;
-  padding-bottom: 100px;
-}
+
+
 .grid4 {
   margin-top: 40px;
   display: grid;

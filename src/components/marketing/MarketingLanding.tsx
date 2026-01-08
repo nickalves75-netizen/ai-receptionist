@@ -77,7 +77,8 @@ export default function MarketingLanding(props: {
       <div className={styles.divider} />
 
       {/* OUR SOLUTIONS */}
-      <Reveal as="section" className={styles.section} delayMs={40}>
+      <Reveal as="section" className={`${styles.section} ${styles.solutionsSection}`} delayMs={40}>
+
         <div className={styles.container}>
           <Reveal as="div" delayMs={60}>
             <h2 className={styles.h2}>Solutions</h2>

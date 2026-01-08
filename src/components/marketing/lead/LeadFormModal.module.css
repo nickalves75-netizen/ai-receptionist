@@ -15,7 +15,7 @@
   border-radius: 22px;
 
   /* Transparent background using your login background */
-  background-image: url("/neais-logo.png");
+  background-image: url("/neais-office.png");
   background-size: cover;
   background-position: center;
 
@@ -94,14 +94,14 @@
 }
 
 .active{
-  border-color: rgba(14,124,102,0.55);
+  border-color: rgba(13, 16, 216, 0.55);
   color: #0b1220;
 }
 
 .done{
   background: rgba(14,124,102,0.12);
-  border-color: rgba(14,124,102,0.55);
-  color: #0e7c66;
+  border-color: rgba(245, 21, 51, 0.55);
+  color: #191ce4;
 }
 
 .stepLine{
@@ -276,7 +276,7 @@
   padding: 0 16px;
   border-radius: 12px;
   border: none;
-  background: #0e7c66;
+  background: #0e55ee;
   color: #fff;
   font-weight: 900;
   cursor: pointer;
