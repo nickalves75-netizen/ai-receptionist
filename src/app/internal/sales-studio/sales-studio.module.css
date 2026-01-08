@@ -4,8 +4,8 @@
   --k-border: rgba(15, 17, 21, 0.10);
   --k-text: #0f1115;
   --k-muted: rgba(15, 17, 21, 0.62);
-  --k-green: #0e7a64;
-  --k-green-2: #0aa07f;
+  --k-green: #f10909;
+  --k-green-2: #2702f8;
 }
 
 .page {
@@ -20,7 +20,7 @@
 .bg {
   position: absolute;
   inset: 0;
-  background-image: url("/neais-logo.png");
+  background-image: url("\neais-logo-800w.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

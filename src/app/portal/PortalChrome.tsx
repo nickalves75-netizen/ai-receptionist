@@ -73,7 +73,7 @@ export default function PortalChrome({ children }: { children: React.ReactNode }
       <div className={s.shell}>
         <div className={s.sidebar}>
           <div className={s.brand}>
-            <div className={s.brandTitle}>Kallr Portal</div>
+            <div className={s.brandTitle}>NEAIS Portal</div>
             <div className={s.brandSub}>Loading…</div>
           </div>
         </div>
@@ -86,7 +86,7 @@ export default function PortalChrome({ children }: { children: React.ReactNode }
     <div className={s.shell}>
       <aside className={s.sidebar}>
         <div className={s.brand}>
-          <div className={s.brandTitle}>Kallr Portal</div>
+          <div className={s.brandTitle}>NEAIS Portal</div>
           <div className={s.brandSub}>{bizName || "Your account"}</div>
         </div>
 

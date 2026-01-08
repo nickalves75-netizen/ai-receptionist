@@ -25,7 +25,7 @@ export default function MarketingLanding(props: {
 }) {
   const subhead =
     props.subhead ??
-    "Kallr answers calls instantly, qualifies leads, and books the next step—so you never lose business to missed calls.";
+    "NEAIS answers calls instantly, qualifies leads, and books the next step—so you never lose business to missed calls.";
 
   // Step 2: open the assessment modal from CTAs (no navigation)
   const [leadOpen, setLeadOpen] = useState(false);
@@ -174,7 +174,7 @@ export default function MarketingLanding(props: {
           <Reveal as="div" delayMs={60}>
             <h2 className={styles.h2}>Transformation</h2>
             <p className={styles.sectionSub}>
-              See how Kallr turns missed calls and slow follow-up into a streamlined lead system.
+              See how NEAIS turns missed calls and slow follow-up into a streamlined lead system.
             </p>
           </Reveal>
 
@@ -191,7 +191,7 @@ export default function MarketingLanding(props: {
 
             <Reveal as="div" delayMs={140} className={styles.panel}>
               <h3 className={styles.panelTitle}>After</h3>
-              <p className={styles.panelTagGood}>Streamlined lead capture & a perfect inboud Kallr </p>
+              <p className={styles.panelTagGood}>Streamlined lead capture & a perfect inboud worklow. </p>
               <ul className={styles.checkList}>
                 <li>Calls answered instantly</li>
                 <li>Leads qualified consistently</li>
@@ -253,7 +253,7 @@ export default function MarketingLanding(props: {
         <Reveal as="section" className={`${styles.section} ${styles.whySection}`} delayMs={40}>
           <div className={styles.container}>
             <Reveal as="div" delayMs={60}>
-              <h2 className={styles.h2}>Why Choose Kallr?</h2>
+              <h2 className={styles.h2}>Why Choose NEAIS?</h2>
               <p className={styles.sectionSub}>
                 A clean system that answers, qualifies, and converts—without adding headcount.
               </p>
@@ -306,7 +306,7 @@ export default function MarketingLanding(props: {
           <Reveal as="div" delayMs={80} className={styles.ctaCard}>
             <h2 className={styles.ctaTitle}>Ready to capture more leads automatically?</h2>
             <p className={styles.ctaText}>
-              Take the Kallr assessment. We’ll map the fastest path to better lead capture, call handling, and local
+              Take the NEAIS assessment. We’ll map the fastest path to better lead capture, call handling, and local
               visibility.
             </p>
 

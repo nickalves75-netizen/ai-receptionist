@@ -14,7 +14,7 @@ export default function PersonaSection(props: {
   const persona = props.persona;
 
   const imgSrc = persona === "female" ? "/femaleicon.png" : "/maleicon.png";
-  const imgAlt = persona === "female" ? "Kallr AI Receptionist (female)" : "Kallr AI Receptionist (male)";
+  const imgAlt = persona === "female" ? "NEAIS AI Receptionist (female)" : "NEAIS AI Receptionist (male)";
   const imageSide: "left" | "right" = persona === "female" ? "left" : "right";
 
   const kicker = props.kicker ?? "Human-sounding AI, always on";
@@ -26,7 +26,8 @@ export default function PersonaSection(props: {
 
   const body =
     props.body ??
-    "Kallr answers in a natural voice, asks the right questions, captures clean notes, and routes the next step—24/7. No missed calls. No awkward hand-offs. Just a consistent intake that converts.";
+    "NEAIS
+     answers in a natural voice, asks the right questions, captures clean notes, and routes the next step—24/7. No missed calls. No awkward hand-offs. Just a consistent intake that converts.";
 
   const bullets =
     props.bullets ??

@@ -97,7 +97,7 @@ export default function RoadmapTimeline(props: {
   }, []);
 
   const kicker = props.kicker ?? "Roadmap";
-  const title = props.title ?? "How Kallr gets deployed";
+  const title = props.title ?? "How NEAIS deploys";
   const subtitle =
     props.subtitle ??
     "A simple path from first call to a live system—then ongoing optimization as you grow.";

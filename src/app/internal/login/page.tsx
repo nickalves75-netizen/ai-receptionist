@@ -118,7 +118,7 @@ export default function InternalLoginPage() {
       {/* center */}
       <div style={styles.centerWrap}>
         <div style={styles.iconWrap}>
-          <Image src="/neais-logo.png"alt="Kallr" width={200} height={200} priority />
+          <Image src="/neais-logo.png"alt="NEAIS" width={200} height={200} priority />
         </div>
 
         <section style={styles.card}>
@@ -153,7 +153,7 @@ export default function InternalLoginPage() {
               {msg ? <div style={styles.msg}>{msg}</div> : null}
 
               <button type="submit" disabled={busy} style={styles.launchBtn}>
-                {busy ? "Launching..." : "Launch Kallr"}
+                {busy ? "Launching..." : "Launch NEAIS"}
               </button>
             </form>
           </div>

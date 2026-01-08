@@ -3,7 +3,7 @@
    ========================= */
 
 :root{
-  --k-brand: #0e7c66;
+  --k-brand: #0e107c;
 
   /* LIGHT */
   --k-bg: #ffffff;
@@ -21,8 +21,8 @@
   --k-shadow2: 0 16px 34px rgba(2,6,23,0.10);
 
   /* Green “burst” */
-  --k-burst: rgba(14,124,102,0.14);
-  --k-burst2: rgba(14,124,102,0.10);
+  --k-burst: rgba(124, 14, 14, 0.14);
+  --k-burst2: rgba(255, 255, 255, 0.1);
 
   /* Hero overlay (used for image heroes like Quotes/Blog) */
   --k-hero-overlay: linear-gradient(180deg, rgba(255,255,255,0.90), rgba(255,255,255,0.92));

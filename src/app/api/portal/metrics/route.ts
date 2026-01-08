@@ -12,7 +12,7 @@ function parseDays(url: string) {
 function findOutcomeResult(structuredOutputs: any) {
   if (!structuredOutputs || typeof structuredOutputs !== "object") return null;
 
-  const acceptedNames = new Set(["NEAIS Call Outcome (v1)", "Kallr Call Outcome (v1)"]);
+  const acceptedNames = new Set(["NEAIS Call Outcome (v1)", "NEAIS Call Outcome (v1)"]);
 
   for (const k of Object.keys(structuredOutputs)) {
     const item = (structuredOutputs as any)[k];

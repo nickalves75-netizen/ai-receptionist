@@ -4,8 +4,8 @@
   --k-border: rgba(0,0,0,0.10);
   --k-text: #0f1115;
   --k-muted: rgba(15,17,21,0.62);
-  --k-green: #0e7a64;
-  --k-green-2: #0aa07f;
+  --k-green: #0c10f3;
+  --k-green-2: #f31111;
   --k-soft: rgba(14,122,100,0.12);
 }
 
@@ -74,7 +74,7 @@
 
 .navItemActive {
   background: var(--k-soft);
-  outline: 1px solid rgba(14,122,100,0.25);
+  outline: 1px solid rgba(43, 4, 184, 0.25);
 }
 
 .sidebarFoot {

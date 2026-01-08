@@ -33,8 +33,7 @@ export default function PortalLoginPage() {
     setBusy(true);
     setMsg(null);
     try {
-      // IMPORTANT: change this to your production domain later:
-      // e.g. https://kallr.ai/portal/login
+      
       const redirectTo =
         typeof window !== "undefined" ? `${window.location.origin}/portal/login` : undefined;
 
@@ -55,7 +54,7 @@ export default function PortalLoginPage() {
         <h1 className={s.authTitle}>Client Portal</h1>
         <div className={s.authSub}>
           {mode === "login"
-            ? "New User? Please login here with your provided Kallr account to see your dashboard."
+            ? "New User? Please login here with your provided NEAIS account to see your dashboard."
             : "Enter your email and we’ll send a password reset link."}
         </div>
 

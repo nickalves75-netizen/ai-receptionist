@@ -91,7 +91,7 @@ async function verifyTurnstile(token: string | null) {
 
 function getPublicBase() {
   return (
-    (process.env.NEAIS_PUBLIC_BASE_URL || process.env.KALLR_PUBLIC_BASE_URL || "").replace(/\/+$/, "")
+    (process.env.NEAIS_PUBLIC_BASE_URL || process.env.NEAIS_PUBLIC_BASE_URL || "").replace(/\/+$/, "")
   );
 }
 
@@ -180,13 +180,14 @@ async function sendLeadEmail(args: {
 }) {
   const apiKey = process.env.RESEND_API_KEY;
 
-  const toList = (process.env.NEAIS_LEAD_NOTIFY_EMAILS || process.env.KALLR_LEAD_NOTIFY_EMAILS || "")
+  const toList = (process.env.NEAIS_LEAD_NOTIFY_EMAILS || process.env.NEAIS_LEAD_NOTIFY_EMAILS || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
 
   const from =
-    process.env.NEAIS_FROM_EMAIL || process.env.KALLR_FROM_EMAIL || "NEAIS <onboarding@resend.dev>";
+    process.env.NEAIS_FROM_EMAIL || process.env.NEAIS
+    _FROM_EMAIL || "NEAIS <onboarding@resend.dev>";
 
   // If not configured yet, silently skip (do not break lead flow)
   if (!apiKey || !toList.length) {

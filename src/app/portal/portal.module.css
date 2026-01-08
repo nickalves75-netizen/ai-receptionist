@@ -4,8 +4,8 @@
   --p-border: rgba(0,0,0,0.10);
   --p-text: #0f1115;
   --p-muted: rgba(15,17,21,0.62);
-  --p-green: #0e7a64;
-  --p-soft: rgba(14,122,100,0.12);
+  --p-green: #f81735;
+  --p-soft: rgba(21, 14, 122, 0.12);
 }
 
 .shell {
@@ -70,7 +70,7 @@
 
 .navActive {
   background: var(--p-soft);
-  border-color: rgba(14,122,100,0.35);
+  border-color: rgba(122, 14, 28, 0.35);
   color: var(--p-green);
 }
 
@@ -139,7 +139,7 @@
 }
 
 .pillActive {
-  border-color: rgba(14,122,100,0.35);
+  border-color: rgba(14, 30, 122, 0.35);
   background: var(--p-soft);
   color: var(--p-green);
 }
@@ -211,7 +211,7 @@
 
 .badgeGreen {
   background: var(--p-soft);
-  border-color: rgba(14,122,100,0.35);
+  border-color: rgba(101, 98, 245, 0.35);
   color: var(--p-green);
 }
 

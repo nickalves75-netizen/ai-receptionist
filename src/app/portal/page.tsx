@@ -83,7 +83,7 @@ export default function PortalPage() {
     <main style={{ padding: 24, maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 28, margin: 0 }}>Kallr Dashboard</h1>
+          <h1 style={{ fontSize: 28, margin: 0 }}>NEAIS Dashboard</h1>
           <p style={{ marginTop: 6, opacity: 0.75 }}>Call performance and lead activity.</p>
         </div>
 
@@ -160,7 +160,7 @@ export default function PortalPage() {
       </div>
 
       <p style={{ marginTop: 14, opacity: 0.65, fontSize: 13 }}>
-        Need help? <Link href="/">Contact Kallr</Link>
+        Need help? <Link href="/">Contact NEAIS</Link>
       </p>
     </main>
   );

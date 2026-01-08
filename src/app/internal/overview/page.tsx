@@ -94,7 +94,7 @@ export default async function OverviewPage() {
   return (
     <div className={s.page}>
       <h1 className={s.h1}>Overview</h1>
-      <div className={s.sub}>Key numbers that matter day-to-day inside Kallr.</div>
+      <div className={s.sub}>Key numbers that matter day-to-day inside NEAIS.</div>
 
       <div className={s.kpis}>
         <KPI label="Total Leads" value={total} />

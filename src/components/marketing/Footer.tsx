@@ -45,7 +45,7 @@ export default function Footer() {
           <div className={styles.brandRow}>
             <Image
               src="/neais-logo.png"
-              alt="Kallr icon"
+              alt="NEAIS icon"
               width={64}
               height={64}
               className={styles.brandIcon}
@@ -58,7 +58,8 @@ export default function Footer() {
             AI reception + follow-up automation built to capture demand and book the next step—24/7.
           </p>
 
-          <div className={styles.meta}>© {year} Kallr. All rights reserved.</div>
+          <div className={styles.meta}>© {year} NEAIS
+            . All rights reserved.</div>
         </div>
 
         {/* Link Columns */}
