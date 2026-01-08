@@ -186,8 +186,10 @@ async function sendLeadEmail(args: {
     .filter(Boolean);
 
   const from =
-    process.env.NEAIS_FROM_EMAIL || process.env.NEAIS
-    _FROM_EMAIL || "NEAIS <onboarding@resend.dev>";
+  process.env.NEAIS_FROM_EMAIL ||
+  process.env.FROM_EMAIL ||
+  "NEAIS <onboarding@resend.dev>";
+
 
   // If not configured yet, silently skip (do not break lead flow)
   if (!apiKey || !toList.length) {
